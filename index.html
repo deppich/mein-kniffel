@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Multiplayer Kniffel Pro</title>
+    <style>
+        :root {
+            --die-size: 60px;
+            --dot-size: 10px;
+            --bg-color: #1a1a1a;
+            --die-white: #ffffff;
+            --keep-gold: #f1c40f;
+            --accent-green: #27ae60;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: var(--bg-color);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+
+        /* Setup Screen */
+        #setup-screen {
+            background: #2c3e50;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        input {
+            padding: 10px;
+            border-radius: 5px;
+            border: none;
+            margin: 5px;
+            width: 200px;
+        }
+
+        /* Game Screen */
+        #game-screen {
+            display: none;
+            width: 100%;
+            max-width: 1000px;
+        }
+
+        .current-player-info {
+            background: var(--accent-green);
+            padding: 10px 30px;
+            border-radius: 50px;
+            font-size: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Würfel */
+        .dice-area {
+            display: flex;
+            gap: 20px;
+            margin: 20px auto;
+            perspective: 1000px;
+            height: 80px;
+            justify-content: center;
+        }
+
+        .die-container {
+            width: var(--die-size);
+            height: var(--die-size);
+            position: relative;
+            transform-style: preserve-3d;
+            cursor: pointer;
+        }
+
+        .die-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: var(--die-white);
+            border-radius: 10px;
+            display: grid;
+            grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+            padding: 6px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            backface-visibility: hidden;
+        }
+
+        .die-container.flat {
+            transform: none !important;
+        }
+
+        .die-container.flat .die-face {
+            position: static;
+            transform: none !important;
+        }
+
+        .die-container.flat .die-face:not(.active-face) {
+            display: none;
+        }
+
+        .dot {
+            background: #2c3e50;
+            border-radius: 50%;
+            width: var(--dot-size);
+            height: var(--dot-size);
+            align-self: center;
+            justify-self: center;
+        }
+
+        /* 3D-Positionen */
+        .f1 {
+            transform: translateZ(30px);
+        }
+
+        .f2 {
+            transform: rotateX(-90deg) translateZ(30px);
+        }
+
+        .f3 {
+            transform: rotateY(90deg) translateZ(30px);
+        }
+
+        .f4 {
+            transform: rotateY(-90deg) translateZ(30px);
+        }
+
+        .f5 {
+            transform: rotateX(90deg) translateZ(30px);
+        }
+
+        .f6 {
+            transform: rotateY(180deg) translateZ(30px);
+        }
+
+        .die-container.keep .die-face {
+            background: var(--keep-gold);
+        }
+
+        .rolling {
+            animation: spin3D 0.5s linear infinite;
+        }
+
+        @keyframes spin3D {
+            0% {
+                transform: rotateX(0) rotateY(0);
+            }
+
+            100% {
+                transform: rotateX(360deg) rotateY(720deg);
+            }
+        }
+
+        /* Score-Bereich */
+        .main-layout {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        .score-table {
+            flex: 2;
+            border-collapse: collapse;
+            background: white;
+            color: #333;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .score-table th,
+        .score-table td {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            text-align: center;
+        }
+
+        .score-table th {
+            background: #34495e;
+            color: white;
+        }
+
+        .active-col {
+            background: #e8f6ed;
+            font-weight: bold;
+        }
+
+        button {
+            background: var(--accent-green);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        .score-btn {
+            padding: 4px 8px;
+            font-size: 11px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="setup-screen">
+        <h1>Kniffel Setup</h1>
+        <p>Wie viele Personen spielen?</p>
+        <input type="number" id="player-count" value="2" min="1" max="4"><br><br>
+        <div id="name-inputs"></div>
+        <button onclick="startGame()">SPIEL STARTEN</button>
+    </div>
+
+    <div id="game-screen">
+        <center>
+            <div class="current-player-info">Am Zug: <span id="active-player-name">---</span></div>
+            <div class="dice-area" id="dice-container"></div>
+            <button id="roll-btn" onclick="rollDice()"
+                style="font-size: 20px; padding: 15px 40px; border-radius: 50px;">WÜRFELN (3 übrig)</button>
+        </center>
+
+        <div class="main-layout" style="margin-top: 30px;">
+            <table class="score-table">
+                <thead>
+                    <tr id="table-head">
+                        <th>Kategorie</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let players = [];
+        let currentPlayerIdx = 0;
+        let dice = [1, 1, 1, 1, 1];
+        let keeps = [false, false, false, false, false];
+        let rollsLeft = 3;
+
+        const cats = [
+            { id: '1', n: '1er' }, { id: '2', n: '2er' }, { id: '3', n: '3er' },
+            { id: '4', n: '4er' }, { id: '5', n: '5er' }, { id: '6', n: '6er' },
+            { id: 'fh', n: 'Full House' }, { id: 'ks', n: 'Kl. Straße' },
+            { id: 'gs', n: 'Gr. Straße' }, { id: 'kn', n: 'Kniffel' }, { id: 'ch', n: 'Chance' }
+        ];
+
+        // Setup Inputs generieren
+        document.getElementById('player-count').addEventListener('change', updateNameInputs);
+        function updateNameInputs() {
+            const count = document.getElementById('player-count').value;
+            const container = document.getElementById('name-inputs');
+            container.innerHTML = '';
+            for (let i = 1; i <= count; i++) {
+                container.innerHTML += `<input type="text" id="name-${i}" placeholder="Name Spieler ${i}" value="Spieler ${i}"><br>`;
+            }
+        }
+        updateNameInputs();
+
+        function startGame() {
+            const count = document.getElementById('player-count').value;
+            for (let i = 1; i <= count; i++) {
+                players.push({
+                    name: document.getElementById(`name-${i}`).value,
+                    scores: {},
+                    finished: 0
+                });
+            }
+            document.getElementById('setup-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'block';
+            initDice();
+            initTable();
+            updateTurnInfo();
+        }
+
+        function initDice() {
+            const container = document.getElementById('dice-container');
+            for (let i = 0; i < 5; i++) {
+                container.innerHTML += `
+                    <div class="die-container flat" id="die-${i}" onclick="toggleKeep(${i})">
+                        ${[1, 2, 3, 4, 5, 6].map(n => `<div class="die-face f${n}" data-num="${n}">${getDots(n)}</div>`).join('')}
+                    </div>`;
+            }
+        }
+
+        function getDots(n) {
+            const pos = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+            let h = ''; for (let i = 0; i < 9; i++) h += pos[n].includes(i) ? '<div class="dot"></div>' : '<div></div>';
+            return h;
+        }
+
+        function initTable() {
+            const head = document.getElementById('table-head');
+            players.forEach((p, i) => head.innerHTML += `<th id="head-p${i}">${p.name}</th>`);
+
+            const body = document.getElementById('table-body');
+            cats.forEach(c => {
+                let row = `<tr><td>${c.n}</td>`;
+                players.forEach((p, i) => {
+                    row += `<td id="cell-${c.id}-p${i}">-</td>`;
+                });
+                row += `<td><button class="score-btn" id="btn-${c.id}" onclick="chooseScore('${c.id}')" disabled>Wählen</button></td></tr>`;
+                body.innerHTML += row;
+            });
+            body.innerHTML += `<tr style="background:#eee; font-weight:bold"><td>TOTAL</td>${players.map((p, i) => `<td id="total-p${i}">0</td>`).join('')}<td></td></tr>`;
+        }
+
+        function rollDice() {
+            if (rollsLeft <= 0) return;
+            const btn = document.getElementById('roll-btn');
+            btn.disabled = true;
+            for (let i = 0; i < 5; i++) if (!keeps[i]) {
+                document.getElementById(`die-${i}`).classList.remove('flat');
+                document.getElementById(`die-${i}`).classList.add('rolling');
+            }
+            setTimeout(() => {
+                for (let i = 0; i < 5; i++) if (!keeps[i]) {
+                    dice[i] = Math.floor(Math.random() * 6) + 1;
+                    const el = document.getElementById(`die-${i}`);
+                    el.classList.remove('rolling');
+                    el.classList.add('flat');
+                    el.querySelectorAll('.die-face').forEach(f => {
+                        f.classList.remove('active-face');
+                        if (f.dataset.num == dice[i]) f.classList.add('active-face');
+                    });
+                }
+                rollsLeft--;
+                btn.innerText = `WÜRFELN (${rollsLeft} übrig)`;
+                if (rollsLeft > 0) btn.disabled = false;
+                updateScoreButtons(true);
+            }, 600);
+        }
+
+        function chooseScore(catId) {
+            const p = players[currentPlayerIdx];
+            const points = calculatePoints(catId);
+            p.scores[catId] = points;
+            p.finished++;
+
+            document.getElementById(`cell-${catId}-p${currentPlayerIdx}`).innerText = points;
+            document.getElementById(`cell-${catId}-p${currentPlayerIdx}`).classList.add('filled');
+
+            updateTotal(currentPlayerIdx);
+            nextPlayer();
+        }
+
+        function calculatePoints(id) {
+            const sum = dice.reduce((a, b) => a + b, 0);
+            const counts = {}; dice.forEach(x => counts[x] = (counts[x] || 0) + 1);
+            const v = Object.values(counts);
+            const u = [...new Set(dice)].sort();
+            if (!isNaN(id)) return dice.filter(x => x == id).length * id;
+            if (id === 'fh') return (v.includes(3) && v.includes(2)) ? 25 : 0;
+            if (id === 'kn') return v.includes(5) ? 50 : 0;
+            if (id === 'ch') return sum;
+            if (id === 'ks') return isStr(u, 4) ? 30 : 0;
+            if (id === 'gs') return isStr(u, 5) ? 40 : 0;
+            return 0;
+        }
+
+        function isStr(u, l) {
+            let c = 1, m = 1;
+            for (let i = 0; i < u.length - 1; i++) {
+                if (u[i + 1] === u[i] + 1) { c++; m = Math.max(m, c); }
+                else c = 1;
+            }
+            return m >= l;
+        }
+
+        function nextPlayer() {
+            currentPlayerIdx = (currentPlayerIdx + 1) % players.length;
+            resetTurn();
+            updateTurnInfo();
+
+            if (players.every(p => p.finished === cats.length)) {
+                alert("Spiel beendet!");
+            }
+        }
+
+        function resetTurn() {
+            rollsLeft = 3;
+            keeps = [false, false, false, false, false];
+            document.getElementById('roll-btn').innerText = "WÜRFELN (3 übrig)";
+            document.getElementById('roll-btn').disabled = false;
+            for (let i = 0; i < 5; i++) {
+                const el = document.getElementById(`die-${i}`);
+                el.classList.remove('keep');
+                el.classList.add('flat');
+                el.querySelectorAll('.die-face').forEach(f => f.classList.remove('active-face'));
+            }
+            updateScoreButtons(false);
+        }
+
+        function updateTurnInfo() {
+            document.getElementById('active-player-name').innerText = players[currentPlayerIdx].name;
+            players.forEach((_, i) => {
+                document.getElementById(`head-p${i}`).style.background = (i === currentPlayerIdx) ? '#27ae60' : '#34495e';
+            });
+        }
+
+        function updateScoreButtons(on) {
+            const p = players[currentPlayerIdx];
+            cats.forEach(c => {
+                const btn = document.getElementById(`btn-${c.id}`);
+                btn.disabled = !on || p.scores[c.id] !== undefined;
+            });
+        }
+
+        function updateTotal(idx) {
+            const p = players[idx];
+            let up = 0; for (let i = 1; i <= 6; i++) up += (p.scores[i] || 0);
+            let bonus = up >= 63 ? 35 : 0;
+            let tot = Object.values(p.scores).reduce((a, b) => a + b, 0) + bonus;
+            document.getElementById(`total-p${idx}`).innerText = tot;
+        }
+
+        function toggleKeep(i) {
+            if (rollsLeft < 3) {
+                keeps[i] = !keeps[i];
+                document.getElementById(`die-${i}`).classList.toggle('keep');
+            }
+        }
+    </script>
+</body>
+
+</html>
