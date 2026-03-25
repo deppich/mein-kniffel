@@ -83,7 +83,6 @@
         // --------------------------------------------------
 
         firebase.initializeApp(firebaseConfig);
-        const analytics = getAnalytics(app);
         const db = firebase.database();
 
         let myName = prompt("Wie heißt du?") || "Gast_" + Math.floor(Math.random() * 100);
