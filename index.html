@@ -138,6 +138,11 @@
         Name ändern
     </button>
 
+    <button onclick="fullGameReset()"
+        style="background: #e74c3c; color: white; margin-top: 20px; padding: 10px 20px; border-radius: 5px; border: none; font-weight: bold; cursor: pointer;">
+        NEUES SPIEL STARTEN (Alles löschen)
+    </button>
+
     <script>
         // --- DEINE FIREBASE KONFIGURATION HIER EINSETZEN ---
         const firebaseConfig = {
@@ -398,6 +403,33 @@
                 const total = Object.values(allScores[p] || {}).reduce((a, b) => a + b, 0);
                 footRow.innerHTML += `<td style="padding:10px; border:1px solid #ddd; text-align:center">${total}</td>`;
             });
+        }
+
+        function fullGameReset() {
+            // Sicherheitsabfrage, damit man nicht aus Versehen löscht
+            if (confirm("Möchtest du wirklich alle Punkte löschen und ein neues Spiel starten?")) {
+
+                // 1. Punkte-Tabelle in Firebase löschen
+                const resetScores = db.ref('scores').remove();
+
+                // 2. Würfel-Status zurücksetzen
+                const resetDice = db.ref('game').set({
+                    activePlayer: "",
+                    dice: [1, 1, 1, 1, 1],
+                    keeps: [false, false, false, false, false],
+                    rollsLeft: 3
+                });
+
+                // Warten, bis beides erledigt ist, dann Seite neu laden
+                Promise.all([resetScores, resetDice]).then(() => {
+                    alert("Das Spiel wurde für alle Teilnehmer zurückgesetzt!");
+                    // Optional: Seite neu laden, um sicherzugehen, dass alles frisch ist
+                    location.reload();
+                }).catch(err => {
+                    console.error("Fehler beim Zurücksetzen:", err);
+                    alert("Ups, da gab es ein Problem mit der Datenbank.");
+                });
+            }
         }
 
         // Ruf diese Funktionen beim Start auf
