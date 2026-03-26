@@ -310,7 +310,10 @@
         const categories = [
             { id: '1', n: '1er' }, { id: '2', n: '2er' }, { id: '3', n: '3er' },
             { id: '4', n: '4er' }, { id: '5', n: '5er' }, { id: '6', n: '6er' },
-            { id: 'kn', n: 'Kniffel (50)' }, { id: 'ch', n: 'Chance' }
+            { id: 'kn', n: 'Kniffel (50)' }, { id: 'ch', n: 'Chance' },
+            { id: 'fh', n: 'Full House (25)' },
+            { id: 'ks', n: 'Kl. Straße (30)' },
+            { id: 'gs', n: 'Gr. Straße (40)' }
         ];
 
         // Überwache ALLE Scores von ALLEN Spielern
@@ -330,6 +333,23 @@
         db.ref('presence').on('value', (snap) => {
             const players = snap.val() ? Object.keys(snap.val()) : [];
             document.getElementById('player-list').innerText = players.join(', ');
+        });
+
+        // Überwache wer online ist UND wer Punkte hat
+        db.ref('presence').on('value', (presenceSnap) => {
+            const onlinePlayers = presenceSnap.val() ? Object.keys(presenceSnap.val()) : [myName];
+
+            // Jetzt holen wir die Scores und bauen die Tabelle für alle Online-Spieler
+            db.ref('scores').once('value', (scoreSnap) => {
+                const allScores = scoreSnap.val() || {};
+
+                // Wir stellen sicher, dass JEDER Online-Spieler eine Spalte bekommt
+                onlinePlayers.forEach(p => {
+                    if (!allScores[p]) allScores[p] = {};
+                });
+
+                renderGlobalTable(allScores);
+            });
         });
 
 
@@ -355,13 +375,29 @@
 
         // 5. PUNKTE BERECHNEN (vereinfacht)
         function calculatePoints(id) {
-            if (id === 'ch') return gameState.dice.reduce((a, b) => a + b, 0);
-            if (id === 'kn') {
-                const first = gameState.dice[0];
-                return gameState.dice.every(d => d === first) ? 50 : 0;
-            }
-            const val = parseInt(id);
-            return gameState.dice.filter(d => d === val).length * val;
+            const d = [...gameState.dice].sort();
+            const sum = d.reduce((a, b) => a + b, 0);
+            const counts = {}; d.forEach(x => counts[x] = (counts[x] || 0) + 1);
+            const v = Object.values(counts);
+
+            // 1er bis 6er
+            if (!isNaN(id)) return d.filter(x => x == id).length * parseInt(id);
+
+            // Kniffel
+            if (id === 'kn') return v.includes(5) ? 50 : 0;
+
+            // Chance
+            if (id === 'ch') return sum;
+
+            // Full House (3er Paar + 2er Paar)
+            if (id === 'fh') return (v.includes(3) && v.includes(2)) ? 25 : 0;
+
+            // Straßen (Logik für aufeinanderfolgende Zahlen)
+            const uniqueDice = [...new Set(d)].join('');
+            if (id === 'ks') return /1234|2345|3456/.test(uniqueDice) ? 30 : 0; // Kleine Straße
+            if (id === 'gs') return /12345|23456/.test(uniqueDice) ? 40 : 0;    // Große Straße
+
+            return 0;
         }
 
         function renderGlobalTable(allScores) {
