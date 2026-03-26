@@ -98,8 +98,19 @@
         // ECHTZEIT-UPDATE: Wenn sich in der Datenbank was ändert
         db.ref('game').on('value', (snapshot) => {
             const data = snapshot.val();
-            if (!data) return;
 
+            // FALLS DIE DATENBANK LEER IST: Initialisiere sie mit Startwerten
+            if (!data) {
+                db.ref('game').set({
+                    activePlayer: "",
+                    dice: [1, 1, 1, 1, 1],
+                    keeps: [false, false, false, false, false],
+                    rollsLeft: 3
+                });
+                return; // Funktion beenden, da das Setzen ein neues Update auslöst
+            }
+
+            // Daten in unseren lokalen Speicher laden
             gameState = data;
             updateUI();
         });
@@ -107,6 +118,17 @@
         function updateUI() {
             const info = document.getElementById('status-info');
             const btn = document.getElementById('roll-btn');
+
+            // Sicherheitscheck: Nur zeichnen, wenn dice wirklich ein Array ist
+            if (gameState && gameState.dice) {
+                for (let i = 0; i < 5; i++) {
+                    const dieEl = document.getElementById(`die-${i}`);
+                    if (dieEl) {
+                        dieEl.innerText = gameState.dice[i];
+                        dieEl.className = gameState.keeps[i] ? "die keep" : "die";
+                    }
+                }
+            }
 
             // Würfel anzeigen
             for (let i = 0; i < 5; i++) {
