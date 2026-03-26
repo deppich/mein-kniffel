@@ -97,6 +97,10 @@
         <div class="die" id="die-4" onclick="toggleKeep(4)">?</div>
     </div>
 
+    <button id="end-turn-btn" onclick="endTurn()" style="background: #e67e22; margin-top: 10px;" disabled>
+        ZUG BEENDEN
+    </button>
+
     <br><br>
     <button onclick="resetGame()" style="background: #c0392b; font-size: 12px; padding: 5px 15px;">
         Spiel komplett zurücksetzen
@@ -176,45 +180,45 @@
             document.getElementById('status-text').innerText = "Zugriff verweigert (Rules?)";
         });
 
+        // UI-Update erweitern
         function updateUI() {
-            // Sicherheits-Check: Abbrechen wenn dice-Array noch nicht da ist
             if (!gameState || !gameState.dice) return;
 
             const infoText = document.getElementById('status-text');
             const rollBtn = document.getElementById('roll-btn');
+            const endBtn = document.getElementById('end-turn-btn');
 
-            // Würfel im Interface aktualisieren
+            // Würfel & Keeps anzeigen
             for (let i = 0; i < 5; i++) {
                 const dieEl = document.getElementById(`die-${i}`);
-                if (dieEl) {
-                    dieEl.innerText = gameState.dice[i];
-                    dieEl.className = gameState.keeps && gameState.keeps[i] ? "die keep" : "die";
-                }
+                dieEl.innerText = gameState.dice[i];
+                dieEl.className = gameState.keeps[i] ? "die keep" : "die";
             }
 
-            // Wer ist dran Logik
+            // Wer darf was klicken?
             if (gameState.activePlayer === "" || gameState.activePlayer === myName) {
                 infoText.innerText = "Du bist am Zug!";
                 rollBtn.disabled = (gameState.rollsLeft <= 0);
-                rollBtn.innerText = `WÜRFELN (${gameState.rollsLeft || 0} übrig)`;
+                endBtn.disabled = (gameState.rollsLeft === 3); // Erst beenden, wenn mind. 1x gewürfelt
             } else {
                 infoText.innerText = gameState.activePlayer + " ist gerade dran...";
                 rollBtn.disabled = true;
-                rollBtn.innerText = "Warten...";
+                endBtn.disabled = true;
             }
         }
 
+        // Würfeln und sofort in DB speichern
         function sendRoll() {
             if (gameState.rollsLeft <= 0) return;
 
             const newDice = [...gameState.dice];
             for (let i = 0; i < 5; i++) {
-                // Nur würfeln, wenn nicht behalten
                 if (!gameState.keeps[i]) {
                     newDice[i] = Math.floor(Math.random() * 6) + 1;
                 }
             }
 
+            // Update in Firebase: Alle sehen die neuen Würfel sofort
             db.ref('game').update({
                 activePlayer: myName,
                 dice: newDice,
@@ -222,20 +226,20 @@
             });
         }
 
+        // Würfel fixieren und sofort in DB speichern
         function toggleKeep(i) {
-            // Nur der aktive Spieler darf Würfel halten
             if (gameState.activePlayer !== "" && gameState.activePlayer !== myName) return;
             if (gameState.rollsLeft === 3) return; // Noch nicht gewürfelt
 
-            const newKeeps = gameState.keeps ? [...gameState.keeps] : [false, false, false, false, false];
+            const newKeeps = [...gameState.keeps];
             newKeeps[i] = !newKeeps[i];
 
+            // Update in Firebase: Dein Partner sieht sofort, welche Würfel du hältst
             db.ref('game').update({
                 keeps: newKeeps,
                 activePlayer: myName
             });
         }
-
         function resetGame() {
             if (confirm("Willst du das Spiel für ALLE wirklich zurücksetzen?")) {
                 db.ref('game').set({
@@ -253,6 +257,21 @@
         function changeName() {
             localStorage.removeItem('kniffel_name'); // Löscht den gespeicherten Namen
             location.reload(); // Lädt die Seite neu, damit die Abfrage wieder kommt
+        }
+
+        // Zug beenden: Macht den Weg frei für den nächsten
+        function endTurn() {
+            if (gameState.activePlayer !== myName) return;
+
+            // Wir setzen die Würfel und Keeps zurück und löschen den aktiven Spieler
+            db.ref('game').set({
+                activePlayer: "", // Jetzt darf der Nächste würfeln
+                dice: [1, 1, 1, 1, 1],
+                keeps: [false, false, false, false, false],
+                rollsLeft: 3
+            }).then(() => {
+                alert("Dein Zug ist beendet. Der Nächste ist dran!");
+            });
         }
     </script>
 </body>
