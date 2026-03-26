@@ -97,6 +97,11 @@
         <div class="die" id="die-4" onclick="toggleKeep(4)">?</div>
     </div>
 
+    <br><br>
+    <button onclick="resetGame()" style="background: #c0392b; font-size: 12px; padding: 5px 15px;">
+        Spiel komplett zurücksetzen
+    </button>
+
     <button id="roll-btn" onclick="sendRoll()" disabled>WÜRFELN</button>
     <p>Angemeldet als: <b id="my-display-name">...</b></p>
 
@@ -226,6 +231,20 @@
                 keeps: newKeeps,
                 activePlayer: myName
             });
+        }
+
+        function resetGame() {
+            if (confirm("Willst du das Spiel für ALLE wirklich zurücksetzen?")) {
+                db.ref('game').set({
+                    activePlayer: myName, // Du wirst der aktive Spieler
+                    dice: [1, 1, 1, 1, 1],
+                    keeps: [false, false, false, false, false],
+                    rollsLeft: 3
+                }).then(() => {
+                    alert("Spiel wurde zurückgesetzt!");
+                    location.reload(); // Seite neu laden, um alles frisch zu ziehen
+                });
+            }
         }
     </script>
 </body>
