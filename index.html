@@ -104,6 +104,9 @@
 
     <button id="roll-btn" onclick="sendRoll()" disabled>WÜRFELN</button>
     <p>Angemeldet als: <b id="my-display-name">...</b></p>
+    <button onclick="changeName()" style="background: #3498db; font-size: 12px; padding: 5px 15px;">
+        Name ändern
+    </button>
 
     <script>
         // --- DEINE FIREBASE KONFIGURATION HIER EINSETZEN ---
@@ -245,6 +248,11 @@
                     location.reload(); // Seite neu laden, um alles frisch zu ziehen
                 });
             }
+        }
+
+        function changeName() {
+            localStorage.removeItem('kniffel_name'); // Löscht den gespeicherten Namen
+            location.reload(); // Lädt die Seite neu, damit die Abfrage wieder kommt
         }
     </script>
 </body>
