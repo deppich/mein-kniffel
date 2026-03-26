@@ -69,21 +69,28 @@
     <p>Du spielst als: <b id="my-name">...</b></p>
 
     <script>
-        // --- DEINE FIREBASE KONFIGURATION HIER EINSETZEN ---
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.11.0/firebase-analytics.js";
+        // TODO: Add SDKs for Firebase products that you want to use
+        // https://firebase.google.com/docs/web/setup#available-libraries
+
+        // Your web app's Firebase configuration
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
         const firebaseConfig = {
             apiKey: "AIzaSyCn_L6O2TyeZ3Ww_K1OwE6l8L8wWY90OmQ",
-            authDomain: "kniffelonline-default-rtdb.firebaseio.com",
+            authDomain: "kniffelonline.firebaseapp.com",
             databaseURL: "https://kniffelonline-default-rtdb.europe-west1.firebasedatabase.app",
             projectId: "kniffelonline",
-            // storageBucket: "https://kniffelonline-default-rtdb.europe-west1.firebasedatabase.app",
+            storageBucket: "kniffelonline.firebasestorage.app",
             messagingSenderId: "1019396534228",
             appId: "1:1019396534228:web:a0308e51d231cc03c53041",
             measurementId: "G-3N5Q2QB2DQ"
         };
 
-        // --------------------------------------------------
-
-        firebase.initializeApp(firebaseConfig);
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
         const db = firebase.database();
 
         let myName = prompt("Wie heißt du?") || "Gast_" + Math.floor(Math.random() * 100);
@@ -111,48 +118,25 @@
 
             // Würfel anzeigen
             for (let i = 0; i < 5; i++) {
-                const dieEl = document.getElementById(`die-${i}`);
-                dieEl.innerText = gameState.dice[i];
+                const dieEl = document.getElementById(`die-${i}`); dieEl.innerText = gameState.dice[i];
                 dieEl.className = gameState.keeps[i] ? "die keep" : "die";
-            }
-
-            // Wer ist dran?
-            if (gameState.activePlayer === "" || gameState.activePlayer === myName) {
-                info.innerText = "Du bist dran!";
-                btn.disabled = gameState.rollsLeft <= 0;
-            } else {
-                info.innerText = gameState.activePlayer + " würfelt gerade...";
-                btn.disabled = true;
-            }
-        }
-
-        function sendRoll() {
-            // Berechne neue Würfel lokal
-            const newDice = [...gameState.dice];
-            for (let i = 0; i < 5; i++) {
-                if (!gameState.keeps[i]) newDice[i] = Math.floor(Math.random() * 6) + 1;
-            }
-
-            // Sende an alle (Firebase)
-            db.ref('game').update({
-                activePlayer: myName,
-                dice: newDice,
-                rollsLeft: gameState.rollsLeft - 1
-            });
-        }
-
-        function toggleKeep(i) {
-            if (gameState.activePlayer !== myName && gameState.activePlayer !== "") return;
-
-            const newKeeps = [...gameState.keeps];
-            newKeeps[i] = !newKeeps[i];
-
-            db.ref('game').update({
-                keeps: newKeeps,
-                activePlayer: myName
-            });
-        }
-    </script>
+            } // Wer ist dran? if (gameState.activePlayer==="" ||
+            gameState.activePlayer === myName) { info.innerText = "Du bist dran!"; btn.disabled = gameState.rollsLeft <= 0; } else
+            { info.innerText = gameState.activePlayer + " würfelt gerade..."; btn.disabled = true; }
+        } function sendRoll() { //
+        Berechne neue Würfel lokal const newDice = [...gameState.dice]; for (let i = 0; i < 5; i++) {
+                if
+                    (!gameState.keeps[i]) newDice[i] = Math.floor(Math.random() * 6) + 1;
+            } // Sende an alle (Firebase)
+            db.ref('game').update({ activePlayer: myName, dice: newDice, rollsLeft: gameState.rollsLeft - 1 });
+        } function
+            toggleKeep(i) {
+            if (gameState.activePlayer !== myName && gameState.activePlayer !== "") return; const
+                newKeeps = [...gameState.keeps]; newKeeps[i] = !newKeeps[i]; db.ref('game').update({
+                    keeps: newKeeps, activePlayer:
+                        myName
+                });
+        } </script>
 </body>
 
 </html>
