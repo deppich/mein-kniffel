@@ -137,18 +137,35 @@
             statusTag.innerText = snap.val() ? "● Server verbunden" : "○ Verbindung unterbrochen";
         });
 
-        // ECHTZEIT-SYNC: Daten empfangen
         db.ref('game').on('value', (snapshot) => {
             const data = snapshot.val();
 
-            // Falls Datenbank leer ist (beim allerersten Mal)
+            // DEBUG: Schau in die Browser-Konsole (F12), was hier ankommt
+            console.log("Daten von Firebase erhalten:", data);
+
             if (!data) {
-                db.ref('game').set(gameState);
+                console.log("Datenbank ist leer, initialisiere...");
+                const initialStore = {
+                    activePlayer: myName, // Der erste, der connectet, ist dran
+                    dice: [1, 2, 3, 4, 5],
+                    keeps: [false, false, false, false, false],
+                    rollsLeft: 3
+                };
+                db.ref('game').set(initialStore);
                 return;
             }
 
             gameState = data;
+
+            // UI-Elemente direkt hier freischalten, falls sie hängen
+            document.getElementById('status-text').innerText = "Spiel bereit!";
+            document.getElementById('roll-btn').disabled = (gameState.activePlayer !== "" && gameState.activePlayer !== myName);
+
             updateUI();
+        }, (error) => {
+            // Falls Firebase den Zugriff verweigert, sehen wir es jetzt!
+            console.error("Firebase Fehler:", error);
+            document.getElementById('status-text').innerText = "Zugriff verweigert (Rules?)";
         });
 
         function updateUI() {
