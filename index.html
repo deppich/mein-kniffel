@@ -365,15 +365,25 @@
         }
 
         function renderGlobalTable(allScores) {
-            const playerNames = Object.keys(allScores);
-            if (playerNames.length === 0 && myName) playerNames.push(myName); // Fallback für Start
+            // Falls allScores null ist (nach dem Reset), nehmen wir ein leeres Objekt
+            const scores = allScores || {};
+
+            // Wir holen uns alle Spieler, die Punkte haben + dich selbst
+            let playerNames = Object.keys(scores);
+            if (!playerNames.includes(myName)) {
+                playerNames.push(myName);
+            }
 
             // 1. Header (Namen)
             const headRow = document.querySelector('#score-head tr');
             headRow.innerHTML = '<th style="padding:10px; border:1px solid #ddd">Kategorie</th>';
-            playerNames.forEach(p => {
-                const style = (p === myName) ? "color: #2ecc71;" : "";
-                headRow.innerHTML += `<th style="padding:10px; border:1px solid #ddd; ${style}">${p}</th>`;
+
+            playerNames.sort().forEach(p => { // Sortieren, damit die Spalten nicht springen
+                const isMe = (p === myName);
+                headRow.innerHTML += `
+            <th style="padding:10px; border:1px solid #ddd; ${isMe ? 'color: #2ecc71; background: #34495e;' : ''}">
+                ${p} ${isMe ? '(Du)' : ''}
+            </th>`;
             });
 
             // 2. Body (Punkte pro Zeile)
