@@ -101,22 +101,23 @@
                 BEENDEN</button>
         </div>
 
-        <table id="score-table" style="background: white; color: black; border-collapse: collapse; min-width: 250px;">
-            <thead>
-                <tr style="background: #2c3e50; color: white;">
-                    <th>Kategorie</th>
-                    <th id="score-player-name">Deine Punkte</th>
-                </tr>
-            </thead>
-            <tbody id="score-body">
-            </tbody>
-            <tfoot>
-                <tr style="font-weight: bold; background: #eee;">
-                    <td>GESAMT</td>
-                    <td id="total-score">0</td>
-                </tr>
-            </tfoot>
-        </table>
+        <div id="scoreboard-container" style="margin-top: 30px; overflow-x: auto; width: 100%;">
+            <table id="multi-score-table"
+                style="background: white; color: black; border-collapse: collapse; margin: 0 auto; min-width: 400px; border-radius: 8px; overflow: hidden;">
+                <thead id="score-head">
+                    <tr style="background: #2c3e50; color: white;">
+                        <th style="padding: 10px;">Kategorie</th>
+                    </tr>
+                </thead>
+                <tbody id="score-body">
+                </tbody>
+                <tfoot id="score-foot">
+                    <tr style="font-weight: bold; background: #eee;">
+                        <td style="padding: 10px;">GESAMT</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
     </div>
 
     <div class="dice-area" id="dice-container">
@@ -127,16 +128,11 @@
         <div class="die" id="die-4" onclick="toggleKeep(4)">?</div>
     </div>
 
-    <button id="end-turn-btn" onclick="endTurn()" style="background: #e67e22; margin-top: 10px;" disabled>
-        ZUG BEENDEN
-    </button>
-
     <br><br>
     <button onclick="resetGame()" style="background: #c0392b; font-size: 12px; padding: 5px 15px;">
         Spiel komplett zurücksetzen
     </button>
 
-    <button id="roll-btn" onclick="sendRoll()" disabled>WÜRFELN</button>
     <p>Angemeldet als: <b id="my-display-name">...</b></p>
     <button onclick="changeName()" style="background: #3498db; font-size: 12px; padding: 5px 15px;">
         Name ändern
@@ -305,11 +301,18 @@
         }
 
         // Kategorien definieren
+        // Alle Kategorien (erweitert)
         const categories = [
             { id: '1', n: '1er' }, { id: '2', n: '2er' }, { id: '3', n: '3er' },
             { id: '4', n: '4er' }, { id: '5', n: '5er' }, { id: '6', n: '6er' },
             { id: 'kn', n: 'Kniffel (50)' }, { id: 'ch', n: 'Chance' }
         ];
+
+        // Überwache ALLE Scores von ALLEN Spielern
+        db.ref('scores').on('value', (snapshot) => {
+            const allScores = snapshot.val() || {};
+            renderGlobalTable(allScores);
+        });
 
         // 1. ANWESENHEIT: Zeige dich als online
         function updatePresence() {
@@ -324,31 +327,24 @@
             document.getElementById('player-list').innerText = players.join(', ');
         });
 
-        // 3. TABELLE INITIALISIEREN
-        function initScoreTable() {
-            const body = document.getElementById('score-body');
-            body.innerHTML = categories.map(cat => `
-        <tr>
-            <td>${cat.n}</td>
-            <td id="score-${cat.id}" onclick="claimScore('${cat.id}')" style="cursor:pointer; background:#f9f9f9; width:80px;">-</td>
-        </tr>
-    `).join('');
-            loadMyScores();
-        }
 
-        // 4. PUNKTE EINTRAGEN (Lokal & DB)
         function claimScore(catId) {
+            // Nur wenn ich dran bin und gewürfelt habe
             if (gameState.activePlayer !== myName) {
-                alert("Du kannst nur Punkte eintragen, wenn du am Zug bist!");
+                alert("Warte, bis du am Zug bist!");
                 return;
             }
-            if (gameState.rollsLeft === 3) return; // Noch nicht gewürfelt
+            if (gameState.rollsLeft === 3) {
+                alert("Du musst erst mindestens einmal würfeln!");
+                return;
+            }
 
-            let points = calculatePoints(catId);
+            let p = calculatePoints(catId);
 
-            // In Firebase unter deinem Namen speichern
-            db.ref('scores/' + myName + '/' + catId).set(points).then(() => {
-                endTurn(); // Zug endet automatisch nach Eintragung
+            // In Firebase speichern
+            db.ref('scores/' + myName + '/' + catId).set(p).then(() => {
+                // Nach dem Eintragen: Würfel zurücksetzen für den Nächsten
+                endTurn();
             });
         }
 
@@ -363,22 +359,44 @@
             return gameState.dice.filter(d => d === val).length * val;
         }
 
-        // 6. MEINE PUNKTE LADEN & ANZEIGEN
-        function loadMyScores() {
-            db.ref('scores/' + myName).on('value', (snap) => {
-                const myScores = snap.val() || {};
-                let total = 0;
-                categories.forEach(cat => {
-                    const val = myScores[cat.id];
-                    const cell = document.getElementById(`score-${cat.id}`);
-                    if (val !== undefined) {
-                        cell.innerText = val;
-                        cell.style.background = "#d1f2eb";
-                        cell.onclick = null; // Feld gesperrt
-                        total += val;
-                    }
+        function renderGlobalTable(allScores) {
+            const playerNames = Object.keys(allScores);
+            if (playerNames.length === 0 && myName) playerNames.push(myName); // Fallback für Start
+
+            // 1. Header (Namen)
+            const headRow = document.querySelector('#score-head tr');
+            headRow.innerHTML = '<th style="padding:10px; border:1px solid #ddd">Kategorie</th>';
+            playerNames.forEach(p => {
+                const style = (p === myName) ? "color: #2ecc71;" : "";
+                headRow.innerHTML += `<th style="padding:10px; border:1px solid #ddd; ${style}">${p}</th>`;
+            });
+
+            // 2. Body (Punkte pro Zeile)
+            const body = document.getElementById('score-body');
+            body.innerHTML = '';
+
+            categories.forEach(cat => {
+                let rowHtml = `<tr style="border:1px solid #ddd"><td style="padding:8px; font-weight:bold; background:#f4f4f4">${cat.n}</td>`;
+
+                playerNames.forEach(p => {
+                    const scoreValue = (allScores[p] && allScores[p][cat.id] !== undefined) ? allScores[p][cat.id] : "-";
+                    const isMe = (p === myName);
+                    const canClick = isMe && scoreValue === "-" ? `onclick="claimScore('${cat.id}')"` : "";
+                    const bg = (scoreValue !== "-") ? "background:#d1f2eb" : (isMe ? "background:#fff; cursor:pointer" : "background:#fafafa");
+
+                    rowHtml += `<td id="cell-${p}-${cat.id}" ${canClick} style="padding:8px; border:1px solid #ddd; text-align:center; ${bg}">${scoreValue}</td>`;
                 });
-                document.getElementById('total-score').innerText = total;
+
+                rowHtml += `</tr>`;
+                body.innerHTML += rowHtml;
+            });
+
+            // 3. Footer (Gesamt-Summen)
+            const footRow = document.querySelector('#score-foot tr');
+            footRow.innerHTML = '<td style="padding:10px; border:1px solid #ddd">GESAMT</td>';
+            playerNames.forEach(p => {
+                const total = Object.values(allScores[p] || {}).reduce((a, b) => a + b, 0);
+                footRow.innerHTML += `<td style="padding:10px; border:1px solid #ddd; text-align:center">${total}</td>`;
             });
         }
 
