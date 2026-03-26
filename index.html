@@ -89,6 +89,36 @@
         <span id="online-status" class="online-tag"></span>
     </div>
 
+    <div id="lobby">
+        <b>Online:</b> <span id="player-list">Warten...</span>
+    </div>
+
+    <div class="main-layout" style="display: flex; gap: 20px; justify-content: center; margin-top: 20px;">
+        <div id="game-controls">
+            <div class="dice-area" id="dice-container"></div>
+            <button id="roll-btn" onclick="sendRoll()">WÜRFELN (3)</button><br>
+            <button id="end-turn-btn" onclick="endTurn()" style="background: #e67e22; margin-top:10px;" disabled>ZUG
+                BEENDEN</button>
+        </div>
+
+        <table id="score-table" style="background: white; color: black; border-collapse: collapse; min-width: 250px;">
+            <thead>
+                <tr style="background: #2c3e50; color: white;">
+                    <th>Kategorie</th>
+                    <th id="score-player-name">Deine Punkte</th>
+                </tr>
+            </thead>
+            <tbody id="score-body">
+            </tbody>
+            <tfoot>
+                <tr style="font-weight: bold; background: #eee;">
+                    <td>GESAMT</td>
+                    <td id="total-score">0</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
     <div class="dice-area" id="dice-container">
         <div class="die" id="die-0" onclick="toggleKeep(0)">?</div>
         <div class="die" id="die-1" onclick="toggleKeep(1)">?</div>
@@ -273,6 +303,88 @@
                 alert("Dein Zug ist beendet. Der Nächste ist dran!");
             });
         }
+
+        // Kategorien definieren
+        const categories = [
+            { id: '1', n: '1er' }, { id: '2', n: '2er' }, { id: '3', n: '3er' },
+            { id: '4', n: '4er' }, { id: '5', n: '5er' }, { id: '6', n: '6er' },
+            { id: 'kn', n: 'Kniffel (50)' }, { id: 'ch', n: 'Chance' }
+        ];
+
+        // 1. ANWESENHEIT: Zeige dich als online
+        function updatePresence() {
+            const userRef = db.ref('presence/' + myName);
+            userRef.set(true);
+            userRef.onDisconnect().remove(); // Löscht dich, wenn du den Tab schließt
+        }
+
+        // 2. LOBBY: Liste alle Spieler auf
+        db.ref('presence').on('value', (snap) => {
+            const players = snap.val() ? Object.keys(snap.val()) : [];
+            document.getElementById('player-list').innerText = players.join(', ');
+        });
+
+        // 3. TABELLE INITIALISIEREN
+        function initScoreTable() {
+            const body = document.getElementById('score-body');
+            body.innerHTML = categories.map(cat => `
+        <tr>
+            <td>${cat.n}</td>
+            <td id="score-${cat.id}" onclick="claimScore('${cat.id}')" style="cursor:pointer; background:#f9f9f9; width:80px;">-</td>
+        </tr>
+    `).join('');
+            loadMyScores();
+        }
+
+        // 4. PUNKTE EINTRAGEN (Lokal & DB)
+        function claimScore(catId) {
+            if (gameState.activePlayer !== myName) {
+                alert("Du kannst nur Punkte eintragen, wenn du am Zug bist!");
+                return;
+            }
+            if (gameState.rollsLeft === 3) return; // Noch nicht gewürfelt
+
+            let points = calculatePoints(catId);
+
+            // In Firebase unter deinem Namen speichern
+            db.ref('scores/' + myName + '/' + catId).set(points).then(() => {
+                endTurn(); // Zug endet automatisch nach Eintragung
+            });
+        }
+
+        // 5. PUNKTE BERECHNEN (vereinfacht)
+        function calculatePoints(id) {
+            if (id === 'ch') return gameState.dice.reduce((a, b) => a + b, 0);
+            if (id === 'kn') {
+                const first = gameState.dice[0];
+                return gameState.dice.every(d => d === first) ? 50 : 0;
+            }
+            const val = parseInt(id);
+            return gameState.dice.filter(d => d === val).length * val;
+        }
+
+        // 6. MEINE PUNKTE LADEN & ANZEIGEN
+        function loadMyScores() {
+            db.ref('scores/' + myName).on('value', (snap) => {
+                const myScores = snap.val() || {};
+                let total = 0;
+                categories.forEach(cat => {
+                    const val = myScores[cat.id];
+                    const cell = document.getElementById(`score-${cat.id}`);
+                    if (val !== undefined) {
+                        cell.innerText = val;
+                        cell.style.background = "#d1f2eb";
+                        cell.onclick = null; // Feld gesperrt
+                        total += val;
+                    }
+                });
+                document.getElementById('total-score').innerText = total;
+            });
+        }
+
+        // Ruf diese Funktionen beim Start auf
+        updatePresence();
+        initScoreTable();
     </script>
 </body>
 
