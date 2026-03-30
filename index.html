@@ -4,9 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kniffel Online Deluxe</title>
+    <title>Kniffel Online Deluxe + Chat</title>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
     <style>
         :root {
@@ -21,34 +22,24 @@
         }
 
         body {
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Segoe UI', sans-serif;
             background-color: var(--bg-color);
             color: var(--text);
             margin: 0;
             padding: 20px;
-            line-height: 1.6;
         }
 
-        h1 {
-            margin-bottom: 10px;
-            font-weight: 300;
-            letter-spacing: 2px;
-        }
-
-        /* Header & Status */
         .header-section {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 30px;
+            text-align: center;
+            margin-bottom: 20px;
         }
 
         #status-info {
             background: #2c3e50;
             padding: 10px 25px;
             border-radius: 50px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            display: inline-block;
+            margin: 10px;
             border: 1px solid #3e5871;
         }
 
@@ -58,146 +49,93 @@
             font-weight: bold;
         }
 
-        #lobby {
-            font-size: 0.9rem;
-            color: #aaa;
-        }
-
-        #player-list {
-            color: var(--accent);
-            font-weight: bold;
-        }
-
-        /* Haupt-Layout */
         .main-container {
             display: flex;
             flex-wrap: wrap;
             justify-content: center;
-            gap: 30px;
-            max-width: 1200px;
+            gap: 20px;
+            max-width: 1300px;
             margin: 0 auto;
         }
 
-        /* Spiel-Bereich */
-        .game-card {
+        /* Game & Score Cards */
+        .game-card,
+        .score-card,
+        .chat-card {
             background: var(--card-bg);
-            padding: 30px;
-            border-radius: 20px;
+            padding: 20px;
+            border-radius: 15px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-            flex: 1;
-            min-width: 320px;
-            max-width: 500px;
         }
 
+        .game-card {
+            flex: 1;
+            min-width: 320px;
+            max-width: 400px;
+        }
+
+        .score-card {
+            flex: 1.5;
+            min-width: 350px;
+        }
+
+        .chat-card {
+            flex: 1;
+            min-width: 300px;
+            display: flex;
+            flex-direction: column;
+            height: 450px;
+        }
+
+        /* Dice */
         .dice-area {
             display: flex;
-            gap: 12px;
+            gap: 10px;
             justify-content: center;
-            margin: 25px 0;
+            margin: 20px 0;
         }
 
         .die {
-            width: 55px;
-            height: 55px;
+            width: 50px;
+            height: 50px;
             background: white;
             color: #333;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 26px;
+            font-size: 22px;
             font-weight: 800;
-            border-radius: 12px;
+            border-radius: 10px;
             cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.2);
-        }
-
-        .die:hover {
-            transform: scale(1.05);
+            transition: 0.2s;
         }
 
         .keep {
             background: var(--gold) !important;
-            transform: translateY(-8px);
-            box-shadow: 0 8px 20px rgba(241, 196, 15, 0.4);
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(241, 196, 15, 0.4);
         }
 
-        /* Buttons */
-        .btn-group {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        button {
-            padding: 12px 25px;
-            font-size: 16px;
-            border-radius: 12px;
-            border: none;
-            font-weight: bold;
-            cursor: pointer;
-            transition: 0.3s;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        #roll-btn {
-            background: var(--primary);
-            color: white;
-            font-size: 20px;
-        }
-
-        #roll-btn:hover:not(:disabled) {
-            background: #2ecc71;
-            transform: translateY(-2px);
-        }
-
-        #end-turn-btn {
-            background: var(--secondary);
-            color: white;
-        }
-
-        #end-turn-btn:hover:not(:disabled) {
-            background: #d35400;
-        }
-
-        button:disabled {
-            background: #333 !important;
-            color: #777;
-            cursor: not-allowed;
-        }
-
-        /* Scoreboard */
-        .score-card {
-            background: var(--card-bg);
-            padding: 20px;
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-            flex: 1.5;
-            min-width: 350px;
-        }
-
+        /* Table */
         table {
             width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
+            border-collapse: collapse;
+            background: white;
             color: #333;
-            border-radius: 10px;
+            border-radius: 8px;
             overflow: hidden;
         }
 
         th {
             background: #2c3e50;
             color: white;
-            padding: 12px;
-            text-transform: uppercase;
+            padding: 8px;
             font-size: 0.8rem;
         }
 
         td {
-            background: white;
-            padding: 10px;
-            border-bottom: 1px solid #eee;
+            padding: 8px;
+            border: 1px solid #eee;
             text-align: center;
         }
 
@@ -207,37 +145,67 @@
             background: #f8f9fa;
         }
 
-        .my-score-cell {
+        /* Chat */
+        #chat-messages {
+            flex-grow: 1;
+            overflow-y: auto;
+            background: #121212;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+            text-align: left;
+        }
+
+        .msg {
+            margin-bottom: 5px;
+        }
+
+        .msg b {
+            color: var(--accent);
+        }
+
+        #chat-input {
+            padding: 10px;
+            border-radius: 5px;
+            border: none;
+            width: calc(100% - 20px);
+        }
+
+        /* Buttons */
+        button {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
             font-weight: bold;
-            color: var(--primary);
+            cursor: pointer;
+            transition: 0.2s;
+            width: 100%;
+            margin-bottom: 5px;
         }
 
-        /* Footer Controls */
-        .footer-actions {
-            margin-top: 50px;
-            padding: 20px;
-            border-top: 1px solid #333;
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            flex-wrap: wrap;
+        #roll-btn {
+            background: var(--primary);
+            color: white;
+            font-size: 1.2rem;
         }
 
-        .danger-btn {
-            background: transparent;
-            border: 1px solid var(--danger);
-            color: var(--danger);
-            font-size: 12px;
-        }
-
-        .danger-btn:hover {
-            background: var(--danger);
+        #end-turn-btn {
+            background: var(--secondary);
             color: white;
         }
 
-        .info-text {
-            font-size: 0.9rem;
-            color: #888;
+        button:disabled {
+            background: #333 !important;
+            color: #777;
+            cursor: not-allowed;
+        }
+
+        .danger-btn {
+            background: var(--danger);
+            color: white;
+            margin-top: 20px;
+            width: auto;
         }
     </style>
 </head>
@@ -247,18 +215,16 @@
     <div class="header-section">
         <h1>KNIFFEL <span style="color:var(--primary)">LIVE</span> 🎲</h1>
         <div id="status-info">
-            <span id="status-text">Initialisiere...</span>
+            <span id="status-text">Lade Spiel...</span>
             <span id="online-status" class="online-tag"></span>
         </div>
-        <div id="lobby">
-            Online: <span id="player-list">-</span>
-        </div>
+        <p style="font-size: 0.8rem; color: #888;">Online: <span id="player-list" style="color:var(--accent)">-</span>
+        </p>
     </div>
 
     <div class="main-container">
         <div class="game-card">
-            <div class="info-text">Angemeldet als: <b id="my-display-name" style="color:var(--accent)">...</b></div>
-
+            <div style="font-size: 0.9rem; margin-bottom: 10px;">Ich bin: <b id="my-display-name">...</b></div>
             <div class="dice-area">
                 <div class="die" id="die-0" onclick="toggleKeep(0)">?</div>
                 <div class="die" id="die-1" onclick="toggleKeep(1)">?</div>
@@ -266,11 +232,10 @@
                 <div class="die" id="die-3" onclick="toggleKeep(3)">?</div>
                 <div class="die" id="die-4" onclick="toggleKeep(4)">?</div>
             </div>
-
-            <div class="btn-group">
-                <button id="roll-btn" onclick="sendRoll()">WÜRFELN (3)</button>
-                <button id="end-turn-btn" onclick="endTurn()" disabled>ZUG BEENDEN</button>
-            </div>
+            <button id="roll-btn" onclick="sendRoll()">WÜRFELN (3)</button>
+            <button id="end-turn-btn" onclick="endTurn()" disabled>ZUG BEENDEN</button>
+            <button onclick="changeName()"
+                style="background:var(--accent); color:white; margin-top:15px; font-size: 0.7rem;">Name ändern</button>
         </div>
 
         <div class="score-card">
@@ -288,15 +253,21 @@
                 </tfoot>
             </table>
         </div>
+
+        <div class="chat-card">
+            <h3 style="margin:0 0 10px 0; font-size: 1rem; color: var(--accent);">Live Chat</h3>
+            <div id="chat-messages"></div>
+            <input type="text" id="chat-input" placeholder="Nachricht schreiben..."
+                onkeypress="if(event.key==='Enter') sendMessage()">
+        </div>
     </div>
 
-    <div class="footer-actions">
-        <button onclick="changeName()" style="background:var(--accent); font-size:12px;">Name ändern</button>
+    <div style="text-align: center;">
         <button class="danger-btn" onclick="fullGameReset()">SPIEL FÜR ALLE LÖSCHEN</button>
     </div>
 
     <script>
-        // --- DEINE FIREBASE KONFIGURATION HIER EINSETZEN ---
+        // FIREBASE CONFIG (Deine Daten sind hier bereits drin)
         const firebaseConfig = {
             apiKey: "AIzaSyCn_L6O2TyeZ3Ww_K1OwE6l8L8wWY90OmQ",
             authDomain: "kniffelonline.firebaseapp.com",
@@ -304,11 +275,8 @@
             projectId: "kniffelonline",
             storageBucket: "kniffelonline.firebasestorage.app",
             messagingSenderId: "1019396534228",
-            appId: "1:1019396534228:web:a0308e51d231cc03c53041",
-            measurementId: "G-3N5Q2QB2DQ"
+            appId: "1:1019396534228:web:a0308e51d231cc03c53041"
         };
-        // --------------------------------------------------
-
 
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
@@ -318,99 +286,103 @@
         document.getElementById('my-display-name').innerText = myName;
 
         let gameState = { activePlayer: "", dice: [1, 1, 1, 1, 1], keeps: [false, false, false, false, false], rollsLeft: 3 };
-
         const categories = [
             { id: '1', n: '1er' }, { id: '2', n: '2er' }, { id: '3', n: '3er' },
             { id: '4', n: '4er' }, { id: '5', n: '5er' }, { id: '6', n: '6er' },
             { id: 'fh', n: 'Full House' }, { id: 'ks', n: 'Kl. Straße' },
-            { id: 'gs', n: 'Gr. Straße' }, { id: 'kn', n: 'Kniffel' }, { id: 'ch', n: 'Chance' }
+            { id: 'gs', n: 'Gr. Straße' }, { id: 'kn', n: 'KNIFFEL' }, { id: 'ch', n: 'Chance' }
         ];
 
-        // Sync Spielstatus
-        db.ref('game').on('value', (snapshot) => {
-            const data = snapshot.val();
-            if (!data) {
-                db.ref('game').set({ activePlayer: myName, dice: [1, 2, 3, 4, 5], keeps: [false, false, false, false, false], rollsLeft: 3 });
-                return;
-            }
-            gameState = data;
+        // --- GAME SYNC ---
+        db.ref('game').on('value', snap => {
+            if (!snap.val()) return db.ref('game').set({ activePlayer: myName, dice: [1, 2, 3, 4, 5], keeps: [false, false, false, false, false], rollsLeft: 3 });
+            gameState = snap.val();
             updateUI();
         });
 
-        // Sync Presence & Scores
-        db.ref('presence').on('value', (presenceSnap) => {
-            const onlinePlayers = presenceSnap.val() ? Object.keys(presenceSnap.val()) : [myName];
-            document.getElementById('player-list').innerText = onlinePlayers.join(', ');
-
-            db.ref('scores').on('value', (scoreSnap) => {
-                const allScores = scoreSnap.val() || {};
-                onlinePlayers.forEach(p => { if (!allScores[p]) allScores[p] = {}; });
-                renderGlobalTable(allScores, onlinePlayers);
-            });
+        // --- SCORES & PRESENCE ---
+        db.ref('presence').on('value', pSnap => {
+            const players = pSnap.val() ? Object.keys(pSnap.val()) : [myName];
+            document.getElementById('player-list').innerText = players.join(', ');
+            db.ref('scores').on('value', sSnap => renderGlobalTable(sSnap.val() || {}, players));
         });
 
-        function updateUI() {
-            const rollBtn = document.getElementById('roll-btn');
-            const endBtn = document.getElementById('end-turn-btn');
-            const status = document.getElementById('status-text');
+        // --- CHAT LOGIC ---
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            if (!input.value) return;
+            db.ref('chat').push({ name: myName, text: input.value, time: Date.now() });
+            input.value = "";
+        }
 
+        db.ref('chat').limitToLast(20).on('child_added', snap => {
+            const m = snap.val();
+            const div = document.getElementById('chat-messages');
+            div.innerHTML += `<div class="msg"><b>${m.name}:</b> ${m.text}</div>`;
+            div.scrollTop = div.scrollHeight;
+        });
+
+        // --- KNIFFEL FEUERWERK ---
+        // Wir überwachen die Scores. Wenn ein neuer 50er Score (Kniffel) auftaucht, böllert es!
+        db.ref('scores').on('child_changed', snap => {
+            const playerScores = snap.val();
+            if (playerScores.kn === 50) {
+                celebrate(snap.key);
+            }
+        });
+
+        function celebrate(winner) {
+            const duration = 3 * 1000;
+            const end = Date.now() + duration;
+            (function frame() {
+                confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#27ae60', '#f1c40f'] });
+                confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#27ae60', '#f1c40f'] });
+                if (Date.now() < end) requestAnimationFrame(frame);
+            }());
+        }
+
+        // --- CORE FUNCTIONS ---
+        function updateUI() {
+            const isMe = (gameState.activePlayer === "" || gameState.activePlayer === myName);
+            document.getElementById('status-text').innerText = isMe ? "DU BIST DRAN" : gameState.activePlayer.toUpperCase() + " DRAN";
+            document.getElementById('roll-btn').disabled = !isMe || gameState.rollsLeft <= 0;
+            document.getElementById('roll-btn').innerText = `WÜRFELN (${gameState.rollsLeft})`;
+            document.getElementById('end-turn-btn').disabled = !isMe || gameState.rollsLeft === 3;
             for (let i = 0; i < 5; i++) {
                 const el = document.getElementById(`die-${i}`);
                 el.innerText = gameState.dice[i];
                 el.className = gameState.keeps[i] ? "die keep" : "die";
             }
-
-            const isMyTurn = (gameState.activePlayer === "" || gameState.activePlayer === myName);
-            if (isMyTurn) {
-                status.innerText = "DU BIST DRAN";
-                status.parentElement.style.background = "#27ae60";
-                rollBtn.disabled = gameState.rollsLeft <= 0;
-                rollBtn.innerText = `WÜRFELN (${gameState.rollsLeft})`;
-                endBtn.disabled = gameState.rollsLeft === 3;
-            } else {
-                status.innerText = gameState.activePlayer.toUpperCase() + " WÜRFELT...";
-                status.parentElement.style.background = "#34495e";
-                rollBtn.disabled = true;
-                endBtn.disabled = true;
-            }
         }
 
-        function renderGlobalTable(allScores, onlinePlayers) {
-            const playerNames = [...new Set([...onlinePlayers, ...Object.keys(allScores)])].sort();
+        function renderGlobalTable(allScores, players) {
+            const pNames = [...new Set([...players, ...Object.keys(allScores)])].sort();
+            const head = document.querySelector('#score-head tr');
+            head.innerHTML = '<th>Kategorie</th>';
+            pNames.forEach(p => head.innerHTML += `<th style="${p === myName ? 'background:var(--primary)' : ''}">${p}</th>`);
 
-            // Header
-            const headRow = document.querySelector('#score-head tr');
-            headRow.innerHTML = '<th>Kategorie</th>';
-            playerNames.forEach(p => {
-                headRow.innerHTML += `<th style="${p === myName ? 'background:#27ae60' : ''}">${p}</th>`;
-            });
-
-            // Body
             const body = document.getElementById('score-body');
             body.innerHTML = '';
             categories.forEach(cat => {
                 let row = `<tr><td class="cat-name">${cat.n}</td>`;
-                playerNames.forEach(p => {
+                pNames.forEach(p => {
                     const val = (allScores[p] && allScores[p][cat.id] !== undefined) ? allScores[p][cat.id] : "-";
                     const isMe = (p === myName);
-                    const clickable = isMe && val === "-" ? `onclick="claimScore('${cat.id}')" style="cursor:pointer; background:#fff"` : "";
-                    const style = val !== "-" ? "background:#d1f2eb; font-weight:bold" : "";
-                    row += `<td ${clickable} style="${style}">${val}</td>`;
+                    const action = isMe && val === "-" ? `onclick="claimScore('${cat.id}')" style="cursor:pointer; background:#fff"` : "";
+                    row += `<td ${action} style="${val !== "-" ? "background:#d1f2eb; font-weight:bold" : ""}">${val}</td>`;
                 });
                 body.innerHTML += row + `</tr>`;
             });
 
-            // Footer
-            const footRow = document.querySelector('#score-foot tr');
-            footRow.innerHTML = '<td class="cat-name">GESAMT</td>';
-            playerNames.forEach(p => {
+            const foot = document.querySelector('#score-foot tr');
+            foot.innerHTML = '<td class="cat-name">GESAMT</td>';
+            pNames.forEach(p => {
                 const total = Object.values(allScores[p] || {}).reduce((a, b) => a + b, 0);
-                footRow.innerHTML += `<td style="background:#eee">${total}</td>`;
+                foot.innerHTML += `<td style="background:#eee">${total}</td>`;
             });
         }
 
         function sendRoll() {
-            if (gameState.rollsLeft <= 0) return;
             const newDice = [...gameState.dice];
             for (let i = 0; i < 5; i++) if (!gameState.keeps[i]) newDice[i] = Math.floor(Math.random() * 6) + 1;
             db.ref('game').update({ activePlayer: myName, dice: newDice, rollsLeft: gameState.rollsLeft - 1 });
@@ -418,14 +390,14 @@
 
         function toggleKeep(i) {
             if (gameState.activePlayer !== "" && gameState.activePlayer !== myName) return;
-            if (gameState.rollsLeft === 3) return;
             const nk = [...gameState.keeps]; nk[i] = !nk[i];
             db.ref('game').update({ keeps: nk, activePlayer: myName });
         }
 
-        function claimScore(catId) {
+        function claimScore(id) {
             if (gameState.activePlayer !== myName || gameState.rollsLeft === 3) return;
-            db.ref('scores/' + myName + '/' + catId).set(calculatePoints(catId)).then(() => endTurn());
+            const val = calculatePoints(id);
+            db.ref('scores/' + myName + '/' + id).set(val).then(() => endTurn());
         }
 
         function calculatePoints(id) {
@@ -443,23 +415,10 @@
             return 0;
         }
 
-        function endTurn() {
-            db.ref('game').set({ activePlayer: "", dice: [1, 1, 1, 1, 1], keeps: [false, false, false, false, false], rollsLeft: 3 });
-        }
-
-        function fullGameReset() {
-            if (confirm("Alles löschen?")) {
-                db.ref('scores').remove();
-                endTurn();
-            }
-        }
-
+        function endTurn() { db.ref('game').set({ activePlayer: "", dice: [1, 1, 1, 1, 1], keeps: [false, false, false, false, false], rollsLeft: 3 }); }
+        function fullGameReset() { if (confirm("Alles löschen?")) { db.ref('scores').remove(); db.ref('chat').remove(); endTurn(); } }
         function changeName() { localStorage.removeItem('kniffel_name'); location.reload(); }
-        function updatePresence() {
-            const r = db.ref('presence/' + myName);
-            r.set(true); r.onDisconnect().remove();
-        }
-
+        function updatePresence() { const r = db.ref('presence/' + myName); r.set(true); r.onDisconnect().remove(); }
         updatePresence();
     </script>
 </body>
