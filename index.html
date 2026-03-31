@@ -246,25 +246,31 @@
         }
 
         .die {
-            width: 55px;
-            height: 55px;
+            width: 65px;
+            /* Etwas größer für die Augen */
+            height: 65px;
             background: white;
-            color: #333;
-            /* Dunkle Augen */
+            color: #222;
             display: flex;
             align-items: center;
             justify-content: center;
-            /* --- HIER WIRD ES WICHTIG --- */
-            font-size: 50px;
-            /* Schön groß, damit die Augen sichtbar sind */
-            font-weight: normal;
-            /* Unicode-Symbole brauchen kein bold */
+            /* WICHTIG: Schriftgröße hochschrauben! */
+            font-size: 60px;
+            line-height: 1;
+            font-family: "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
             border-radius: 12px;
             cursor: pointer;
-            transition: 0.2s;
-            border: 3px solid transparent;
-            line-height: 1;
-            /* Verhindert vertikales Verschieben */
+            transition: transform 0.1s, background 0.2s;
+            border: 3px solid #ccc;
+            user-select: none;
+            /* Verhindert Markieren beim Klicken */
+        }
+
+        .die.keep {
+            background: #f1c40f !important;
+            border-color: #d4ac0d;
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(241, 196, 15, 0.4);
         }
     </style>
 </head>
@@ -394,86 +400,83 @@
         }
 
         function getDiceIcon(num) {
-            switch (num) {
-                case 1: return "&#9856;"; // ⚀
-                case 2: return "&#9857;"; // ⚁
-                case 3: return "&#9858;"; // ⚂
-                case 4: return "&#9859;"; // ⚃
-                case 5: return "&#9860;"; // ⚄
-                case 6: return "&#9861;"; // ⚅
-                default: return "?";      // Falls noch nicht gewürfelt wurde (0)
-            }
+            const icons = {
+                1: '⚀',
+                2: '⚁',
+                3: '⚂',
+                4: '⚃',
+                5: '⚄',
+                6: '⚅'
+            };
+            return icons[num] || '?'; // Zeigt '?' wenn num = 0
         }
 
         // Variable, um den Host zu identifizieren (der alphabetisch erste in der Liste)
         let isHost = false;
 
-        function updateUI() {
-            // Würfel-Optik aktualisieren
+        // 1. REINE UI-UPDATE FUNKTION
+        // Diese Funktion macht NUR die optische Darstellung basierend auf dem aktuellen Stand
+        function renderUI(players) {
+            // Würfel aktualisieren
             for (let i = 0; i < 5; i++) {
                 const el = document.getElementById(`die-${i}`);
                 if (el) {
-                    // Wir nutzen .innerHTML, damit der Browser den Entity-Code übersetzt
                     el.innerHTML = getDiceIcon(gameState.dice[i]);
                     el.className = gameState.keeps[i] ? "die keep" : "die";
                 }
             }
 
+            const lobby = document.getElementById('lobby-section');
+            const gameCard = document.querySelector('.game-card');
+            const scoreCard = document.querySelector('.score-card');
+            const startBtn = document.getElementById('start-game-btn');
+
+            if (!gameState.gameStarted) {
+                // LOBBY MODUS
+                lobby.style.display = "block";
+                gameCard.style.opacity = "0.3";
+                gameCard.style.pointerEvents = "none";
+                scoreCard.style.opacity = "0.3";
+
+                document.getElementById('lobby-players').innerText = "Bereit: " + players.join(", ");
+
+                if (isHost) {
+                    startBtn.style.display = "block";
+                    document.getElementById('lobby-status').innerText = "Du bist der Host. Warte auf alle Spieler...";
+                } else {
+                    startBtn.style.display = "none";
+                    document.getElementById('lobby-status').innerText = `Warte darauf, dass ${players[0]} startet...`;
+                }
+            } else {
+                // SPIEL MODUS
+                lobby.style.display = "none";
+                gameCard.style.opacity = "1";
+                gameCard.style.pointerEvents = "auto";
+                scoreCard.style.opacity = "1";
+
+                const currentPlayer = gameState.activePlayer || players[0];
+                const isMyTurn = (currentPlayer === myName);
+
+                document.getElementById('status-text').innerText = isMyTurn ? "DU BIST DRAN!" : `${currentPlayer} IST DRAN`;
+
+                const rb = document.getElementById('roll-btn');
+                rb.disabled = !isMyTurn || gameState.rollsLeft <= 0;
+            }
+        }
+
+        // 2. FIREBASE LISTENER (Nur einmal beim Start aufrufen!)
+        function initGameListeners() {
+            // Listener für Spieler-Anwesenheit
             presenceRef.on('value', snap => {
                 const players = snap.val() ? Object.keys(snap.val()).sort() : [myName];
                 isHost = (players[0] === myName);
 
-                // Check: Läuft das Spiel schon?
+                // Listener für Spielstatus (Game Start)
                 roomRef.child('gameStarted').on('value', startSnap => {
-                    const hasStarted = startSnap.val();
-                    const lobby = document.getElementById('lobby-section');
-                    const gameCard = document.querySelector('.game-card');
-                    const scoreCard = document.querySelector('.score-card');
-
-                    if (!hasStarted) {
-                        // LOBBY MODUS
-                        lobby.style.display = "block";
-                        gameCard.style.opacity = "0.3";
-                        gameCard.style.pointerEvents = "none";
-                        scoreCard.style.opacity = "0.3";
-
-                        document.getElementById('lobby-players').innerText = "Bereit: " + players.join(", ");
-
-                        // Nur der Host sieht den Start-Button
-                        const startBtn = document.getElementById('start-game-btn');
-                        if (isHost) {
-                            startBtn.style.display = "block";
-                            document.getElementById('lobby-status').innerText = "Du bist der Host. Warte auf alle Spieler...";
-                        } else {
-                            startBtn.style.display = "none";
-                            document.getElementById('lobby-status').innerText = "Warte darauf, dass " + players[0] + " das Spiel startet...";
-                        }
-                    } else {
-                        // SPIEL MODUS
-                        lobby.style.display = "none";
-                        gameCard.style.opacity = "1";
-                        gameCard.style.pointerEvents = "auto";
-                        scoreCard.style.opacity = "1";
-
-                        // Hier kommt deine bestehende Zug-Logik rein
-                        const currentPlayer = gameState.activePlayer || players[0];
-                        const isMyTurn = (currentPlayer === myName);
-                        document.getElementById('status-text').innerText = isMyTurn ? "DU BIST DRAN!" : currentPlayer + " IST DRAN";
-
-                        const rb = document.getElementById('roll-btn');
-                        rb.disabled = !isMyTurn || gameState.rollsLeft <= 0;
-                    }
+                    gameState.gameStarted = startSnap.val();
+                    renderUI(players); // UI neu zeichnen, wenn sich was ändert
                 });
             });
-
-            // Würfel-Anzeige (wie bisher)
-            for (let i = 0; i < 5; i++) {
-                const el = document.getElementById(`die-${i}`);
-                if (el) {
-                    el.innerText = gameState.dice[i];
-                    el.className = gameState.keeps[i] ? "die keep" : "die";
-                }
-            }
         }
 
         function startGame() {
