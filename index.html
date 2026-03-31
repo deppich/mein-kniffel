@@ -230,6 +230,14 @@
     </div>
 
     <div class="main-container">
+        <div id="lobby-section"
+            style="background: var(--card-bg); padding: 20px; border-radius: 15px; margin-bottom: 20px; text-align: center; border: 2px solid var(--accent);">
+            <h3>Wartezimmer</h3>
+            <p id="lobby-status">Warte auf Mitspieler...</p>
+            <div id="lobby-players" style="margin: 10px 0; color: var(--gold);"></div>
+            <button id="start-game-btn" onclick="startGame()" style="background: var(--primary); display: none;">SPIEL
+                JETZT STARTEN</button>
+        </div>
         <div class="game-card">
             <div style="font-size: 0.9rem; margin-bottom: 15px;">Spieler: <b id="my-display-name">...</b></div>
             <div class="dice-area">
@@ -325,13 +333,65 @@
             updateUI();
         });
 
-        function updateUI() {
-            const isMe = (gameState.activePlayer === "" || gameState.activePlayer === myName);
-            document.getElementById('status-text').innerText = isMe ? "DU BIST DRAN" : gameState.activePlayer.toUpperCase() + " IST DRAN";
-            const rb = document.getElementById('roll-btn');
-            rb.disabled = !isMe || gameState.rollsLeft <= 0;
-            rb.innerText = `WÜRFELN (${gameState.rollsLeft})`;
+        function getNextPlayer(currentName, allPlayers) {
+            const sorted = allPlayers.sort();
+            const currentIndex = sorted.indexOf(currentName);
+            const nextIndex = (currentIndex + 1) % sorted.length;
+            return sorted[nextIndex];
+        }
 
+        // Variable, um den Host zu identifizieren (der alphabetisch erste in der Liste)
+        let isHost = false;
+
+        function updateUI() {
+            presenceRef.on('value', snap => {
+                const players = snap.val() ? Object.keys(snap.val()).sort() : [myName];
+                isHost = (players[0] === myName);
+
+                // Check: Läuft das Spiel schon?
+                roomRef.child('gameStarted').on('value', startSnap => {
+                    const hasStarted = startSnap.val();
+                    const lobby = document.getElementById('lobby-section');
+                    const gameCard = document.querySelector('.game-card');
+                    const scoreCard = document.querySelector('.score-card');
+
+                    if (!hasStarted) {
+                        // LOBBY MODUS
+                        lobby.style.display = "block";
+                        gameCard.style.opacity = "0.3";
+                        gameCard.style.pointerEvents = "none";
+                        scoreCard.style.opacity = "0.3";
+
+                        document.getElementById('lobby-players').innerText = "Bereit: " + players.join(", ");
+
+                        // Nur der Host sieht den Start-Button
+                        const startBtn = document.getElementById('start-game-btn');
+                        if (isHost) {
+                            startBtn.style.display = "block";
+                            document.getElementById('lobby-status').innerText = "Du bist der Host. Warte auf alle Spieler...";
+                        } else {
+                            startBtn.style.display = "none";
+                            document.getElementById('lobby-status').innerText = "Warte darauf, dass " + players[0] + " das Spiel startet...";
+                        }
+                    } else {
+                        // SPIEL MODUS
+                        lobby.style.display = "none";
+                        gameCard.style.opacity = "1";
+                        gameCard.style.pointerEvents = "auto";
+                        scoreCard.style.opacity = "1";
+
+                        // Hier kommt deine bestehende Zug-Logik rein
+                        const currentPlayer = gameState.activePlayer || players[0];
+                        const isMyTurn = (currentPlayer === myName);
+                        document.getElementById('status-text').innerText = isMyTurn ? "DU BIST DRAN!" : currentPlayer + " IST DRAN";
+
+                        const rb = document.getElementById('roll-btn');
+                        rb.disabled = !isMyTurn || gameState.rollsLeft <= 0;
+                    }
+                });
+            });
+
+            // Würfel-Anzeige (wie bisher)
             for (let i = 0; i < 5; i++) {
                 const el = document.getElementById(`die-${i}`);
                 if (el) {
@@ -339,6 +399,27 @@
                     el.className = gameState.keeps[i] ? "die keep" : "die";
                 }
             }
+        }
+
+        function startGame() {
+            if (!isHost) return;
+
+            presenceRef.once('value', snap => {
+                const players = snap.val() ? Object.keys(snap.val()).sort() : [myName];
+
+                // 1. Spiel als gestartet markieren
+                roomRef.child('gameStarted').set(true);
+
+                // 2. Den ersten Spieler (Host) als aktiv setzen
+                gameRef.update({
+                    activePlayer: players[0],
+                    rollsLeft: 3,
+                    dice: [1, 2, 3, 4, 5]
+                });
+
+                // 3. Chat-Nachricht senden
+                chatRef.push({ name: "SYSTEM", text: "Das Spiel wurde gestartet! " + players[0] + " beginnt." });
+            });
         }
 
         function sendRoll() {
@@ -354,13 +435,39 @@
         }
 
         function claimScore(id) {
+            // Statische Felder ignorieren
             if (categories.find(c => c.id === id)?.isStatic) return;
-            if (gameState.activePlayer !== "" && gameState.activePlayer !== myName) return;
-            if (gameState.rollsLeft === 3) return;
 
-            const val = calculatePoints(id);
-            scoreRef.child(myName).child(id).set(val).then(() => {
-                gameRef.set({ activePlayer: "", dice: [1, 1, 1, 1, 1], keeps: [false, false, false, false, false], rollsLeft: 3 });
+            // PRÜFUNG: Bin ich wirklich dran?
+            presenceRef.once('value', snap => {
+                const players = snap.val() ? Object.keys(snap.val()).sort() : [myName];
+                const currentPlayer = gameState.activePlayer || players[0];
+
+                if (currentPlayer !== myName) {
+                    alert("Halt! Du bist noch nicht an der Reihe.");
+                    return;
+                }
+
+                if (gameState.rollsLeft === 3) {
+                    alert("Du musst mindestens einmal würfeln!");
+                    return;
+                }
+
+                const val = calculatePoints(id);
+
+                // Punkt speichern
+                scoreRef.child(myName).child(id).set(val).then(() => {
+                    // Nächsten Spieler ermitteln
+                    const nextPlayer = getNextPlayer(myName, players);
+
+                    // Spielstatus für den NÄCHSTEN setzen
+                    gameRef.set({
+                        activePlayer: nextPlayer,
+                        dice: [1, 1, 1, 1, 1],
+                        keeps: [false, false, false, false, false],
+                        rollsLeft: 3
+                    });
+                });
             });
         }
 
@@ -461,7 +568,12 @@
             return 0;
         }
 
-        function fullGameReset() { if (confirm("Raum zurücksetzen?")) roomRef.remove(); }
+        function fullGameReset() {
+            if (confirm("Raum wirklich komplett zurücksetzen?")) {
+                roomRef.remove(); // Löscht game, scores, chat UND gameStarted
+                location.reload(); // Seite neu laden, um sauber in der Lobby zu starten
+            }
+        }
         function changeName() { localStorage.removeItem('kniffel_name'); location.reload(); }
         const r = presenceRef.child(myName); r.set(true); r.onDisconnect().remove();
     </script>
