@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kniffel Online Deluxe + Chat</title>
+    <title>Kniffel Online - Room Edition</title>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
@@ -43,12 +43,6 @@
             border: 1px solid #3e5871;
         }
 
-        .online-tag {
-            color: #2ecc71;
-            font-size: 0.8rem;
-            font-weight: bold;
-        }
-
         .main-container {
             display: flex;
             flex-wrap: wrap;
@@ -58,7 +52,6 @@
             margin: 0 auto;
         }
 
-        /* Game & Score Cards */
         .game-card,
         .score-card,
         .chat-card {
@@ -84,10 +77,9 @@
             min-width: 300px;
             display: flex;
             flex-direction: column;
-            height: 450px;
+            height: 500px;
         }
 
-        /* Dice */
         .dice-area {
             display: flex;
             gap: 10px;
@@ -96,27 +88,28 @@
         }
 
         .die {
-            width: 50px;
-            height: 50px;
+            width: 55px;
+            height: 55px;
             background: white;
             color: #333;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 22px;
+            font-size: 26px;
             font-weight: 800;
-            border-radius: 10px;
+            border-radius: 12px;
             cursor: pointer;
             transition: 0.2s;
+            border: 3px solid transparent;
         }
 
         .keep {
             background: var(--gold) !important;
             transform: translateY(-5px);
+            border-color: #d4ac0d;
             box-shadow: 0 5px 15px rgba(241, 196, 15, 0.4);
         }
 
-        /* Table */
         table {
             width: 100%;
             border-collapse: collapse;
@@ -129,12 +122,12 @@
         th {
             background: #2c3e50;
             color: white;
-            padding: 8px;
-            font-size: 0.8rem;
+            padding: 10px;
+            font-size: 0.85rem;
         }
 
         td {
-            padding: 8px;
+            padding: 10px;
             border: 1px solid #eee;
             text-align: center;
         }
@@ -143,9 +136,9 @@
             text-align: left;
             font-weight: bold;
             background: #f8f9fa;
+            width: 140px;
         }
 
-        /* Chat */
         #chat-messages {
             flex-grow: 1;
             overflow-y: auto;
@@ -159,6 +152,7 @@
 
         .msg {
             margin-bottom: 5px;
+            color: #ccc;
         }
 
         .msg b {
@@ -166,22 +160,23 @@
         }
 
         #chat-input {
-            padding: 10px;
-            border-radius: 5px;
+            padding: 12px;
+            border-radius: 8px;
             border: none;
-            width: calc(100% - 20px);
+            width: calc(100% - 24px);
+            background: #333;
+            color: white;
         }
 
-        /* Buttons */
         button {
-            padding: 10px 20px;
+            padding: 12px;
             border-radius: 8px;
             border: none;
             font-weight: bold;
             cursor: pointer;
             transition: 0.2s;
             width: 100%;
-            margin-bottom: 5px;
+            margin-bottom: 8px;
         }
 
         #roll-btn {
@@ -190,13 +185,8 @@
             font-size: 1.2rem;
         }
 
-        #end-turn-btn {
-            background: var(--secondary);
-            color: white;
-        }
-
-        button:disabled {
-            background: #333 !important;
+        #roll-btn:disabled {
+            background: #444;
             color: #777;
             cursor: not-allowed;
         }
@@ -204,8 +194,26 @@
         .danger-btn {
             background: var(--danger);
             color: white;
-            margin-top: 20px;
             width: auto;
+            padding: 10px 20px;
+            margin-top: 30px;
+        }
+
+        /* Sieg Overlay */
+        #victory-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: white;
         }
     </style>
 </head>
@@ -213,18 +221,17 @@
 <body>
 
     <div class="header-section">
-        <h1>KNIFFEL <span style="color:var(--primary)">LIVE</span> 🎲</h1>
+        <h1>KNIFFEL <span id="room-display" style="color:var(--accent)">...</span></h1>
         <div id="status-info">
             <span id="status-text">Lade Spiel...</span>
-            <span id="online-status" class="online-tag"></span>
         </div>
-        <p style="font-size: 0.8rem; color: #888;">Online: <span id="player-list" style="color:var(--accent)">-</span>
+        <p style="font-size: 0.8rem; color: #888;">Im Raum: <span id="player-list" style="color:var(--accent)">-</span>
         </p>
     </div>
 
     <div class="main-container">
         <div class="game-card">
-            <div style="font-size: 0.9rem; margin-bottom: 10px;">Ich bin: <b id="my-display-name">...</b></div>
+            <div style="font-size: 0.9rem; margin-bottom: 15px;">Spieler: <b id="my-display-name">...</b></div>
             <div class="dice-area">
                 <div class="die" id="die-0" onclick="toggleKeep(0)">?</div>
                 <div class="die" id="die-1" onclick="toggleKeep(1)">?</div>
@@ -233,8 +240,12 @@
                 <div class="die" id="die-4" onclick="toggleKeep(4)">?</div>
             </div>
             <button id="roll-btn" onclick="sendRoll()">WÜRFELN (3)</button>
-            <button onclick="changeName()"
-                style="background:var(--accent); color:white; margin-top:15px; font-size: 0.7rem;">Name ändern</button>
+            <div style="display:flex; gap:5px; margin-top:10px;">
+                <button onclick="changeName()" style="background:#555; color:white; font-size:0.7rem;">Name
+                    ändern</button>
+                <button onclick="location.hash=''; location.reload();"
+                    style="background:var(--secondary); color:white; font-size:0.7rem;">Raum wechseln</button>
+            </div>
         </div>
 
         <div class="score-card">
@@ -254,19 +265,19 @@
         </div>
 
         <div class="chat-card">
-            <h3 style="margin:0 0 10px 0; font-size: 1rem; color: var(--accent);">Live Chat</h3>
+            <h3 style="margin:0 0 10px 0; font-size: 1rem; color: var(--accent);">Raum-Chat</h3>
             <div id="chat-messages"></div>
-            <input type="text" id="chat-input" placeholder="Nachricht schreiben..."
+            <input type="text" id="chat-input" placeholder="Nachricht..."
                 onkeypress="if(event.key==='Enter') sendMessage()">
         </div>
     </div>
 
     <div style="text-align: center;">
-        <button class="danger-btn" onclick="fullGameReset()">SPIEL FÜR ALLE LÖSCHEN</button>
+        <button class="danger-btn" onclick="fullGameReset()">DIESEN RAUM ZURÜCKSETZEN</button>
     </div>
 
     <script>
-        // FIREBASE CONFIG (Deine Daten sind hier bereits drin)
+        // --- KONFIGURATION & RÄUME ---
         const firebaseConfig = {
             apiKey: "AIzaSyCn_L6O2TyeZ3Ww_K1OwE6l8L8wWY90OmQ",
             authDomain: "kniffelonline.firebaseapp.com",
@@ -276,9 +287,12 @@
             messagingSenderId: "1019396534228",
             appId: "1:1019396534228:web:a0308e51d231cc03c53041"
         };
-
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
+
+        let roomId = window.location.hash.substring(1) || prompt("Raum Name?", "Lobby") || "Lobby";
+        window.location.hash = roomId;
+        document.getElementById('room-display').innerText = "#" + roomId;
 
         let myName = localStorage.getItem('kniffel_name') || prompt("Dein Name:") || "Gast";
         localStorage.setItem('kniffel_name', myName);
@@ -288,202 +302,149 @@
         const categories = [
             { id: '1', n: '1er' }, { id: '2', n: '2er' }, { id: '3', n: '3er' },
             { id: '4', n: '4er' }, { id: '5', n: '5er' }, { id: '6', n: '6er' },
-            { id: 'bonus', n: 'BONUS (ab 63 Pkt.)', isStatic: true }, // Neues Bonus-Feld
+            { id: 'bonus', n: 'BONUS (ab 63)', isStatic: true },
             { id: 'fh', n: 'Full House' }, { id: 'ks', n: 'Kl. Straße' },
             { id: 'gs', n: 'Gr. Straße' }, { id: 'kn', n: 'KNIFFEL' }, { id: 'ch', n: 'Chance' }
         ];
 
-        // --- GAME SYNC ---
-        db.ref('game').on('value', snap => {
+        // --- DATABASE REFS (Room-Scoped) ---
+        const roomRef = db.ref('rooms/' + roomId);
+        const gameRef = roomRef.child('game');
+        const scoreRef = roomRef.child('scores');
+        const chatRef = roomRef.child('chat');
+        const presenceRef = roomRef.child('presence');
+
+        // --- GAME LOGIC ---
+        gameRef.on('value', snap => {
             const data = snap.val();
-
-            // FALLS DIE DATENBANK LEER IST (Initialisierung)
             if (!data) {
-                console.log("Datenbank leer, erstelle Startwerte...");
-                db.ref('game').set({
-                    activePlayer: "",
-                    dice: [1, 2, 3, 4, 5],
-                    keeps: [false, false, false, false, false],
-                    rollsLeft: 3
-                });
-                return; // Funktion hier stoppen, da der nächste 'value' Aufruf gleich kommt
+                gameRef.set({ activePlayer: "", dice: [1, 2, 3, 4, 5], keeps: [false, false, false, false, false], rollsLeft: 3 });
+                return;
             }
-
-            // DATEN ÜBERNEHMEN
             gameState = data;
-
-            // WICHTIG: Falls dice aus irgendeinem Grund fehlt, Standardwerte setzen
-            if (!gameState.dice) gameState.dice = [1, 2, 3, 4, 5];
-
             updateUI();
         });
 
-        // --- SCORES & PRESENCE ---
-        db.ref('presence').on('value', pSnap => {
-            const players = pSnap.val() ? Object.keys(pSnap.val()) : [myName];
-            document.getElementById('player-list').innerText = players.join(', ');
-            db.ref('scores').on('value', sSnap => renderGlobalTable(sSnap.val() || {}, players));
-        });
-
-        // --- CHAT LOGIC ---
-        function sendMessage() {
-            const input = document.getElementById('chat-input');
-            if (!input.value) return;
-            db.ref('chat').push({ name: myName, text: input.value, time: Date.now() });
-            input.value = "";
-        }
-
-        db.ref('chat').limitToLast(20).on('child_added', snap => {
-            const m = snap.val();
-            const div = document.getElementById('chat-messages');
-            div.innerHTML += `<div class="msg"><b>${m.name}:</b> ${m.text}</div>`;
-            div.scrollTop = div.scrollHeight;
-        });
-
-        // --- KNIFFEL FEUERWERK ---
-        // Wir überwachen die Scores. Wenn ein neuer 50er Score (Kniffel) auftaucht, böllert es!
-        db.ref('scores').on('child_changed', snap => {
-            const playerScores = snap.val();
-            if (playerScores.kn === 50) {
-                celebrate(snap.key);
-            }
-        });
-
-        function celebrate(winner) {
-            const duration = 3 * 1000;
-            const end = Date.now() + duration;
-            (function frame() {
-                confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#27ae60', '#f1c40f'] });
-                confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#27ae60', '#f1c40f'] });
-                if (Date.now() < end) requestAnimationFrame(frame);
-            }());
-        }
-
-        // --- CORE FUNCTIONS ---
         function updateUI() {
             const isMe = (gameState.activePlayer === "" || gameState.activePlayer === myName);
-            document.getElementById('status-text').innerText = isMe ? "DU BIST DRAN" : gameState.activePlayer.toUpperCase() + " DRAN";
-            document.getElementById('roll-btn').disabled = !isMe || gameState.rollsLeft <= 0;
-            document.getElementById('roll-btn').innerText = `WÜRFELN (${gameState.rollsLeft})`;
+            document.getElementById('status-text').innerText = isMe ? "DU BIST DRAN" : gameState.activePlayer.toUpperCase() + " IST DRAN";
+            const rb = document.getElementById('roll-btn');
+            rb.disabled = !isMe || gameState.rollsLeft <= 0;
+            rb.innerText = `WÜRFELN (${gameState.rollsLeft})`;
+
             for (let i = 0; i < 5; i++) {
                 const el = document.getElementById(`die-${i}`);
-                el.innerText = gameState.dice[i];
-                el.className = gameState.keeps[i] ? "die keep" : "die";
+                if (el) {
+                    el.innerText = gameState.dice[i];
+                    el.className = gameState.keeps[i] ? "die keep" : "die";
+                }
             }
-        }
-
-        function renderGlobalTable(allScores, players) {
-            const pNames = [...new Set([...players, ...Object.keys(allScores)])].sort();
-
-            // Header
-            const head = document.querySelector('#score-head tr');
-            head.innerHTML = '<th>Kategorie</th>';
-            pNames.forEach(p => head.innerHTML += `<th style="${p === myName ? 'background:var(--primary)' : ''}">${p}</th>`);
-
-            // Body
-            const body = document.getElementById('score-body');
-            body.innerHTML = '';
-
-            categories.forEach(cat => {
-                let row = `<tr><td class="cat-name">${cat.n}</td>`;
-
-                pNames.forEach(p => {
-                    let displayVal = "-";
-                    let style = "";
-                    let action = "";
-
-                    if (cat.id === 'bonus') {
-                        // BONUS LOGIK: Summe 1-6 prüfen
-                        const upperSum = ['1', '2', '3', '4', '5', '6'].reduce((sum, id) => {
-                            return sum + (allScores[p] && allScores[p][id] ? allScores[p][id] : 0);
-                        }, 0);
-                        displayVal = upperSum >= 63 ? 35 : `(${upperSum}/63)`;
-                        style = upperSum >= 63 ? "background:#f1c40f; font-weight:bold; color:black;" : "background:#eee; color:#888; font-size:0.8rem;";
-                    } else {
-                        const val = (allScores[p] && allScores[p][cat.id] !== undefined) ? allScores[p][cat.id] : "-";
-                        displayVal = val;
-                        const isMe = (p === myName);
-                        if (isMe && val === "-") {
-                            action = `onclick="claimScore('${cat.id}')" style="cursor:pointer; background:#fff"`;
-                        }
-                        if (val !== "-") style = "background:#d1f2eb; font-weight:bold";
-                    }
-
-                    row += `<td ${action} style="${style}">${displayVal}</td>`;
-                });
-                body.innerHTML += row + `</tr>`;
-            });
-
-            // Footer (Gesamt inklusive Bonus)
-            const foot = document.querySelector('#score-foot tr');
-            foot.innerHTML = '<td class="cat-name">GESAMT</td>';
-            pNames.forEach(p => {
-                const pScore = allScores[p] || {};
-                // Normale Punkte
-                let total = Object.values(pScore).reduce((a, b) => a + b, 0);
-                // Bonus hinzufügen, falls erreicht
-                const upperSum = ['1', '2', '3', '4', '5', '6'].reduce((sum, id) => sum + (pScore[id] || 0), 0);
-                if (upperSum >= 63) total += 35;
-
-                foot.innerHTML += `<td style="background:#2c3e50; color:white;">${total}</td>`;
-            });
-
-            const pNames2 = [...new Set([...players, ...Object.keys(allScores)])].sort();
-            checkGameEnd(allScores, pNames2);
         }
 
         function sendRoll() {
-            if (gameState.rollsLeft <= 0) {
-                alert("Keine Würfe mehr übrig! Wähle ein Feld in der Tabelle.");
-                return;
-            }
-
             const newDice = [...gameState.dice];
-            for (let i = 0; i < 5; i++) {
-                if (!gameState.keeps[i]) {
-                    newDice[i] = Math.floor(Math.random() * 6) + 1;
-                }
-            }
-
-            db.ref('game').update({
-                activePlayer: myName,
-                dice: newDice,
-                rollsLeft: gameState.rollsLeft - 1
-            });
+            for (let i = 0; i < 5; i++) if (!gameState.keeps[i]) newDice[i] = Math.floor(Math.random() * 6) + 1;
+            gameRef.update({ activePlayer: myName, dice: newDice, rollsLeft: gameState.rollsLeft - 1 });
         }
 
         function toggleKeep(i) {
             if (gameState.activePlayer !== "" && gameState.activePlayer !== myName) return;
             const nk = [...gameState.keeps]; nk[i] = !nk[i];
-            db.ref('game').update({ keeps: nk, activePlayer: myName });
+            gameRef.update({ keeps: nk, activePlayer: myName });
         }
 
-        function claimScore(catId) {
-            // Statische Felder wie Bonus kann man nicht anklicken
-            if (categories.find(c => c.id === catId)?.isStatic) return;
+        function claimScore(id) {
+            if (categories.find(c => c.id === id)?.isStatic) return;
+            if (gameState.activePlayer !== "" && gameState.activePlayer !== myName) return;
+            if (gameState.rollsLeft === 3) return;
 
-            if (gameState.activePlayer !== "" && gameState.activePlayer !== myName) {
-                alert("Warte, bis du am Zug bist!");
-                return;
-            }
-            if (gameState.rollsLeft === 3) {
-                alert("Du musst erst mindestens einmal würfeln!");
-                return;
-            }
-
-            let p = calculatePoints(catId);
-
-            // In Firebase speichern
-            db.ref('scores/' + myName + '/' + catId).set(p).then(() => {
-                // Nach dem Eintragen: Spielstatus für alle zurücksetzen -> Nächster ist dran
-                db.ref('game').set({
-                    activePlayer: "",
-                    dice: [1, 1, 1, 1, 1],
-                    keeps: [false, false, false, false, false],
-                    rollsLeft: 3
-                });
+            const val = calculatePoints(id);
+            scoreRef.child(myName).child(id).set(val).then(() => {
+                gameRef.set({ activePlayer: "", dice: [1, 1, 1, 1, 1], keeps: [false, false, false, false, false], rollsLeft: 3 });
             });
         }
+
+        // --- SCORES & TABLE ---
+        presenceRef.on('value', pSnap => {
+            const players = pSnap.val() ? Object.keys(pSnap.val()) : [myName];
+            document.getElementById('player-list').innerText = players.join(', ');
+            scoreRef.on('value', sSnap => renderGlobalTable(sSnap.val() || {}, players));
+        });
+
+        function renderGlobalTable(allScores, players) {
+            const pNames = [...new Set([...players, ...Object.keys(allScores)])].sort();
+            const head = document.querySelector('#score-head tr');
+            head.innerHTML = '<th>Kategorie</th>';
+            pNames.forEach(p => head.innerHTML += `<th style="${p === myName ? 'background:var(--primary)' : ''}">${p}</th>`);
+
+            const body = document.getElementById('score-body');
+            body.innerHTML = '';
+            categories.forEach(cat => {
+                let row = `<tr><td class="cat-name">${cat.n}</td>`;
+                pNames.forEach(p => {
+                    let val = "-"; let style = ""; let action = "";
+                    if (cat.id === 'bonus') {
+                        const sum = ['1', '2', '3', '4', '5', '6'].reduce((s, i) => s + (allScores[p]?.[i] || 0), 0);
+                        val = sum >= 63 ? 35 : `(${sum}/63)`;
+                        style = sum >= 63 ? "background:#f1c40f; font-weight:bold;" : "background:#eee; color:#999; font-size:0.7rem;";
+                    } else {
+                        const s = allScores[p]?.[cat.id];
+                        val = (s !== undefined) ? s : "-";
+                        if (p === myName && val === "-") action = `onclick="claimScore('${cat.id}')" style="cursor:pointer; background:#fff"`;
+                        if (val !== "-") style = "background:#d1f2eb; font-weight:bold";
+                    }
+                    row += `<td ${action} style="${style}">${val}</td>`;
+                });
+                body.innerHTML += row + `</tr>`;
+            });
+
+            const foot = document.querySelector('#score-foot tr');
+            foot.innerHTML = '<td class="cat-name">GESAMT</td>';
+            pNames.forEach(p => {
+                let total = Object.values(allScores[p] || {}).reduce((a, b) => a + b, 0);
+                const sum6 = ['1', '2', '3', '4', '5', '6'].reduce((s, i) => s + (allScores[p]?.[i] || 0), 0);
+                if (sum6 >= 63) total += 35;
+                foot.innerHTML += `<td style="background:#2c3e50; color:white;">${total}</td>`;
+            });
+            checkGameEnd(allScores, pNames);
+        }
+
+        // --- ENDGAME & FIREWORKS ---
+        function checkGameEnd(allScores, pNames) {
+            const playableCats = categories.filter(c => !c.isStatic).map(c => c.id);
+            const isFinished = pNames.length > 0 && pNames.every(p => playableCats.every(catId => allScores[p]?.[catId] !== undefined));
+
+            const existing = document.getElementById('victory-overlay');
+            if (isFinished) {
+                if (existing) return;
+                let winN = ""; let maxS = -1; let list = "";
+                pNames.forEach(p => {
+                    let t = Object.values(allScores[p] || {}).reduce((a, b) => a + b, 0);
+                    if (['1', '2', '3', '4', '5', '6'].reduce((s, i) => s + (allScores[p]?.[i] || 0), 0) >= 63) t += 35;
+                    if (t > maxS) { maxS = t; winN = p; }
+                    list += `<li>${p}: ${t} Pkt.</li>`;
+                });
+                const div = document.createElement('div');
+                div.id = 'victory-overlay';
+                div.innerHTML = `<h1>🏆 ${winN} GEWINNT! 🏆</h1><h2 style="color:var(--gold)">${maxS} Punkte</h2><ul style="list-style:none;padding:0">${list}</ul><button onclick="fullGameReset()" style="width:200px; background:var(--primary); color:white;">NEUSTART</button>`;
+                document.body.appendChild(div);
+                confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+            } else if (existing) { existing.remove(); }
+        }
+
+        // --- CHAT & HELPERS ---
+        function sendMessage() {
+            const i = document.getElementById('chat-input');
+            if (!i.value) return;
+            chatRef.push({ name: myName, text: i.value });
+            i.value = "";
+        }
+        chatRef.limitToLast(15).on('child_added', snap => {
+            const m = snap.val();
+            const d = document.getElementById('chat-messages');
+            d.innerHTML += `<div class="msg"><b>${m.name}:</b> ${m.text}</div>`;
+            d.scrollTop = d.scrollHeight;
+        });
 
         function calculatePoints(id) {
             const d = [...gameState.dice].sort();
@@ -500,67 +461,9 @@
             return 0;
         }
 
-        function endTurn() { db.ref('game').set({ activePlayer: "", dice: [1, 1, 1, 1, 1], keeps: [false, false, false, false, false], rollsLeft: 3 }); }
-        function fullGameReset() { if (confirm("Alles löschen?")) { db.ref('scores').remove(); db.ref('chat').remove(); endTurn(); } }
+        function fullGameReset() { if (confirm("Raum zurücksetzen?")) roomRef.remove(); }
         function changeName() { localStorage.removeItem('kniffel_name'); location.reload(); }
-        function updatePresence() { const r = db.ref('presence/' + myName); r.set(true); r.onDisconnect().remove(); }
-
-        function checkGameEnd(allScores, pNames) {
-            if (pNames.length === 0) return;
-
-            // Nur die klickbaren Kategorien zählen (11 Stück)
-            const playableCats = categories.filter(c => !c.isStatic).map(c => c.id);
-
-            // Prüfen, ob JEDER Spieler JEDES Feld voll hat
-            const isFinished = pNames.every(p => {
-                const pScore = allScores[p] || {};
-                return playableCats.every(catId => pScore[catId] !== undefined);
-            });
-
-            if (isFinished) {
-                // Gewinner ermitteln
-                let winnerName = "";
-                let maxScore = -1;
-                let summary = "";
-
-                pNames.forEach(p => {
-                    const pScore = allScores[p] || {};
-                    let total = Object.values(pScore).reduce((a, b) => a + b, 0);
-                    // Bonus dazurechnen
-                    const upperSum = ['1', '2', '3', '4', '5', '6'].reduce((sum, id) => sum + (pScore[id] || 0), 0);
-                    if (upperSum >= 63) total += 35;
-
-                    if (total > maxScore) {
-                        maxScore = total;
-                        winnerName = p;
-                    }
-                    summary += `<li>${p}: ${total} Punkte</li>`;
-                });
-
-                // Feuerwerk starten!
-                celebrate();
-
-                // Sieg-Overlay anzeigen (falls noch nicht da)
-                if (!document.getElementById('victory-overlay')) {
-                    const overlay = document.createElement('div');
-                    overlay.id = 'victory-overlay';
-                    overlay.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:1000; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; color:white; font-family:sans-serif;";
-                    overlay.innerHTML = `
-                <h1 style="font-size:4rem; color:#f1c40f; margin:0;">🏆 SIEG! 🏆</h1>
-                <h2 style="font-size:2rem; margin:20px 0;">${winnerName} gewinnt mit ${maxScore} Punkten!</h2>
-                <ul style="list-style:none; padding:0; font-size:1.2rem; color:#aaa;">${summary}</ul>
-                <button onclick="fullGameReset()" style="margin-top:30px; padding:15px 30px; background:#27ae60; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">NEUES SPIEL STARTEN</button>
-            `;
-                    document.body.appendChild(overlay);
-                }
-            } else {
-                // Falls das Spiel noch läuft, aber das Overlay da ist (nach Reset), entfernen
-                const oldOverlay = document.getElementById('victory-overlay');
-                if (oldOverlay) oldOverlay.remove();
-            }
-        }
-
-        updatePresence();
+        const r = presenceRef.child(myName); r.set(true); r.onDisconnect().remove();
     </script>
 </body>
 
