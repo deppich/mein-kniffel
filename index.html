@@ -365,7 +365,6 @@
             document.getElementById('status-text').innerText = isMe ? "DU BIST DRAN" : gameState.activePlayer.toUpperCase() + " DRAN";
             document.getElementById('roll-btn').disabled = !isMe || gameState.rollsLeft <= 0;
             document.getElementById('roll-btn').innerText = `WÜRFELN (${gameState.rollsLeft})`;
-            document.getElementById('end-turn-btn').disabled = !isMe || gameState.rollsLeft === 3;
             for (let i = 0; i < 5; i++) {
                 const el = document.getElementById(`die-${i}`);
                 el.innerText = gameState.dice[i];
