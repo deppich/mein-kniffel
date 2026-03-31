@@ -244,6 +244,28 @@
             color: transparent !important;
             /* Versteckt die Zahl während des Rollens */
         }
+
+        .die {
+            width: 55px;
+            height: 55px;
+            background: white;
+            color: #333;
+            /* Dunkle Augen */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            /* --- HIER WIRD ES WICHTIG --- */
+            font-size: 50px;
+            /* Schön groß, damit die Augen sichtbar sind */
+            font-weight: normal;
+            /* Unicode-Symbole brauchen kein bold */
+            border-radius: 12px;
+            cursor: pointer;
+            transition: 0.2s;
+            border: 3px solid transparent;
+            line-height: 1;
+            /* Verhindert vertikales Verschieben */
+        }
     </style>
 </head>
 
@@ -371,15 +393,28 @@
             return sorted[nextIndex];
         }
 
+        function getDiceIcon(num) {
+            switch (num) {
+                case 1: return "&#9856;"; // ⚀
+                case 2: return "&#9857;"; // ⚁
+                case 3: return "&#9858;"; // ⚂
+                case 4: return "&#9859;"; // ⚃
+                case 5: return "&#9860;"; // ⚄
+                case 6: return "&#9861;"; // ⚅
+                default: return "?";      // Falls noch nicht gewürfelt wurde (0)
+            }
+        }
+
         // Variable, um den Host zu identifizieren (der alphabetisch erste in der Liste)
         let isHost = false;
 
         function updateUI() {
+            // Würfel-Optik aktualisieren
             for (let i = 0; i < 5; i++) {
                 const el = document.getElementById(`die-${i}`);
                 if (el) {
-                    // Falls die Zahl 0 ist (Spielstart), zeige ein Fragezeichen
-                    el.innerText = gameState.dice[i] === 0 ? "?" : gameState.dice[i];
+                    // Wir nutzen .innerHTML, damit der Browser den Entity-Code übersetzt
+                    el.innerHTML = getDiceIcon(gameState.dice[i]);
                     el.className = gameState.keeps[i] ? "die keep" : "die";
                 }
             }
