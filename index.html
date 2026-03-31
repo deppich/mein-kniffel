@@ -233,7 +233,6 @@
                 <div class="die" id="die-4" onclick="toggleKeep(4)">?</div>
             </div>
             <button id="roll-btn" onclick="sendRoll()">WÜRFELN (3)</button>
-            <button id="end-turn-btn" onclick="endTurn()" disabled>ZUG BEENDEN</button>
             <button onclick="changeName()"
                 style="background:var(--accent); color:white; margin-top:15px; font-size: 0.7rem;">Name ändern</button>
         </div>
@@ -289,6 +288,7 @@
         const categories = [
             { id: '1', n: '1er' }, { id: '2', n: '2er' }, { id: '3', n: '3er' },
             { id: '4', n: '4er' }, { id: '5', n: '5er' }, { id: '6', n: '6er' },
+            { id: 'bonus', n: 'BONUS (ab 63 Pkt.)', isStatic: true }, // Neues Bonus-Feld
             { id: 'fh', n: 'Full House' }, { id: 'ks', n: 'Kl. Straße' },
             { id: 'gs', n: 'Gr. Straße' }, { id: 'kn', n: 'KNIFFEL' }, { id: 'ch', n: 'Chance' }
         ];
@@ -357,35 +357,79 @@
 
         function renderGlobalTable(allScores, players) {
             const pNames = [...new Set([...players, ...Object.keys(allScores)])].sort();
+
+            // Header
             const head = document.querySelector('#score-head tr');
             head.innerHTML = '<th>Kategorie</th>';
             pNames.forEach(p => head.innerHTML += `<th style="${p === myName ? 'background:var(--primary)' : ''}">${p}</th>`);
 
+            // Body
             const body = document.getElementById('score-body');
             body.innerHTML = '';
+
             categories.forEach(cat => {
                 let row = `<tr><td class="cat-name">${cat.n}</td>`;
+
                 pNames.forEach(p => {
-                    const val = (allScores[p] && allScores[p][cat.id] !== undefined) ? allScores[p][cat.id] : "-";
-                    const isMe = (p === myName);
-                    const action = isMe && val === "-" ? `onclick="claimScore('${cat.id}')" style="cursor:pointer; background:#fff"` : "";
-                    row += `<td ${action} style="${val !== "-" ? "background:#d1f2eb; font-weight:bold" : ""}">${val}</td>`;
+                    let displayVal = "-";
+                    let style = "";
+                    let action = "";
+
+                    if (cat.id === 'bonus') {
+                        // BONUS LOGIK: Summe 1-6 prüfen
+                        const upperSum = ['1', '2', '3', '4', '5', '6'].reduce((sum, id) => {
+                            return sum + (allScores[p] && allScores[p][id] ? allScores[p][id] : 0);
+                        }, 0);
+                        displayVal = upperSum >= 63 ? 35 : `(${upperSum}/63)`;
+                        style = upperSum >= 63 ? "background:#f1c40f; font-weight:bold; color:black;" : "background:#eee; color:#888; font-size:0.8rem;";
+                    } else {
+                        const val = (allScores[p] && allScores[p][cat.id] !== undefined) ? allScores[p][cat.id] : "-";
+                        displayVal = val;
+                        const isMe = (p === myName);
+                        if (isMe && val === "-") {
+                            action = `onclick="claimScore('${cat.id}')" style="cursor:pointer; background:#fff"`;
+                        }
+                        if (val !== "-") style = "background:#d1f2eb; font-weight:bold";
+                    }
+
+                    row += `<td ${action} style="${style}">${displayVal}</td>`;
                 });
                 body.innerHTML += row + `</tr>`;
             });
 
+            // Footer (Gesamt inklusive Bonus)
             const foot = document.querySelector('#score-foot tr');
             foot.innerHTML = '<td class="cat-name">GESAMT</td>';
             pNames.forEach(p => {
-                const total = Object.values(allScores[p] || {}).reduce((a, b) => a + b, 0);
-                foot.innerHTML += `<td style="background:#eee">${total}</td>`;
+                const pScore = allScores[p] || {};
+                // Normale Punkte
+                let total = Object.values(pScore).reduce((a, b) => a + b, 0);
+                // Bonus hinzufügen, falls erreicht
+                const upperSum = ['1', '2', '3', '4', '5', '6'].reduce((sum, id) => sum + (pScore[id] || 0), 0);
+                if (upperSum >= 63) total += 35;
+
+                foot.innerHTML += `<td style="background:#2c3e50; color:white;">${total}</td>`;
             });
         }
 
         function sendRoll() {
+            if (gameState.rollsLeft <= 0) {
+                alert("Keine Würfe mehr übrig! Wähle ein Feld in der Tabelle.");
+                return;
+            }
+
             const newDice = [...gameState.dice];
-            for (let i = 0; i < 5; i++) if (!gameState.keeps[i]) newDice[i] = Math.floor(Math.random() * 6) + 1;
-            db.ref('game').update({ activePlayer: myName, dice: newDice, rollsLeft: gameState.rollsLeft - 1 });
+            for (let i = 0; i < 5; i++) {
+                if (!gameState.keeps[i]) {
+                    newDice[i] = Math.floor(Math.random() * 6) + 1;
+                }
+            }
+
+            db.ref('game').update({
+                activePlayer: myName,
+                dice: newDice,
+                rollsLeft: gameState.rollsLeft - 1
+            });
         }
 
         function toggleKeep(i) {
@@ -394,10 +438,31 @@
             db.ref('game').update({ keeps: nk, activePlayer: myName });
         }
 
-        function claimScore(id) {
-            if (gameState.activePlayer !== myName || gameState.rollsLeft === 3) return;
-            const val = calculatePoints(id);
-            db.ref('scores/' + myName + '/' + id).set(val).then(() => endTurn());
+        function claimScore(catId) {
+            // Statische Felder wie Bonus kann man nicht anklicken
+            if (categories.find(c => c.id === catId)?.isStatic) return;
+
+            if (gameState.activePlayer !== "" && gameState.activePlayer !== myName) {
+                alert("Warte, bis du am Zug bist!");
+                return;
+            }
+            if (gameState.rollsLeft === 3) {
+                alert("Du musst erst mindestens einmal würfeln!");
+                return;
+            }
+
+            let p = calculatePoints(catId);
+
+            // In Firebase speichern
+            db.ref('scores/' + myName + '/' + catId).set(p).then(() => {
+                // Nach dem Eintragen: Spielstatus für alle zurücksetzen -> Nächster ist dran
+                db.ref('game').set({
+                    activePlayer: "",
+                    dice: [1, 1, 1, 1, 1],
+                    keeps: [false, false, false, false, false],
+                    rollsLeft: 3
+                });
+            });
         }
 
         function calculatePoints(id) {
