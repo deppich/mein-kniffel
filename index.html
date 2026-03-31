@@ -295,8 +295,26 @@
 
         // --- GAME SYNC ---
         db.ref('game').on('value', snap => {
-            if (!snap.val()) return db.ref('game').set({ activePlayer: myName, dice: [1, 2, 3, 4, 5], keeps: [false, false, false, false, false], rollsLeft: 3 });
-            gameState = snap.val();
+            const data = snap.val();
+
+            // FALLS DIE DATENBANK LEER IST (Initialisierung)
+            if (!data) {
+                console.log("Datenbank leer, erstelle Startwerte...");
+                db.ref('game').set({
+                    activePlayer: "",
+                    dice: [1, 2, 3, 4, 5],
+                    keeps: [false, false, false, false, false],
+                    rollsLeft: 3
+                });
+                return; // Funktion hier stoppen, da der nächste 'value' Aufruf gleich kommt
+            }
+
+            // DATEN ÜBERNEHMEN
+            gameState = data;
+
+            // WICHTIG: Falls dice aus irgendeinem Grund fehlt, Standardwerte setzen
+            if (!gameState.dice) gameState.dice = [1, 2, 3, 4, 5];
+
             updateUI();
         });
 
@@ -410,6 +428,9 @@
 
                 foot.innerHTML += `<td style="background:#2c3e50; color:white;">${total}</td>`;
             });
+
+            const pNames2 = [...new Set([...players, ...Object.keys(allScores)])].sort();
+            checkGameEnd(allScores, pNames2);
         }
 
         function sendRoll() {
@@ -484,6 +505,62 @@
         function fullGameReset() { if (confirm("Alles löschen?")) { db.ref('scores').remove(); db.ref('chat').remove(); endTurn(); } }
         function changeName() { localStorage.removeItem('kniffel_name'); location.reload(); }
         function updatePresence() { const r = db.ref('presence/' + myName); r.set(true); r.onDisconnect().remove(); }
+
+        function checkGameEnd(allScores, pNames) {
+            if (pNames.length === 0) return;
+
+            // Nur die klickbaren Kategorien zählen (11 Stück)
+            const playableCats = categories.filter(c => !c.isStatic).map(c => c.id);
+
+            // Prüfen, ob JEDER Spieler JEDES Feld voll hat
+            const isFinished = pNames.every(p => {
+                const pScore = allScores[p] || {};
+                return playableCats.every(catId => pScore[catId] !== undefined);
+            });
+
+            if (isFinished) {
+                // Gewinner ermitteln
+                let winnerName = "";
+                let maxScore = -1;
+                let summary = "";
+
+                pNames.forEach(p => {
+                    const pScore = allScores[p] || {};
+                    let total = Object.values(pScore).reduce((a, b) => a + b, 0);
+                    // Bonus dazurechnen
+                    const upperSum = ['1', '2', '3', '4', '5', '6'].reduce((sum, id) => sum + (pScore[id] || 0), 0);
+                    if (upperSum >= 63) total += 35;
+
+                    if (total > maxScore) {
+                        maxScore = total;
+                        winnerName = p;
+                    }
+                    summary += `<li>${p}: ${total} Punkte</li>`;
+                });
+
+                // Feuerwerk starten!
+                celebrate();
+
+                // Sieg-Overlay anzeigen (falls noch nicht da)
+                if (!document.getElementById('victory-overlay')) {
+                    const overlay = document.createElement('div');
+                    overlay.id = 'victory-overlay';
+                    overlay.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:1000; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; color:white; font-family:sans-serif;";
+                    overlay.innerHTML = `
+                <h1 style="font-size:4rem; color:#f1c40f; margin:0;">🏆 SIEG! 🏆</h1>
+                <h2 style="font-size:2rem; margin:20px 0;">${winnerName} gewinnt mit ${maxScore} Punkten!</h2>
+                <ul style="list-style:none; padding:0; font-size:1.2rem; color:#aaa;">${summary}</ul>
+                <button onclick="fullGameReset()" style="margin-top:30px; padding:15px 30px; background:#27ae60; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">NEUES SPIEL STARTEN</button>
+            `;
+                    document.body.appendChild(overlay);
+                }
+            } else {
+                // Falls das Spiel noch läuft, aber das Overlay da ist (nach Reset), entfernen
+                const oldOverlay = document.getElementById('victory-overlay');
+                if (oldOverlay) oldOverlay.remove();
+            }
+        }
+
         updatePresence();
     </script>
 </body>
