@@ -311,6 +311,8 @@
             { id: '1', n: '1er' }, { id: '2', n: '2er' }, { id: '3', n: '3er' },
             { id: '4', n: '4er' }, { id: '5', n: '5er' }, { id: '6', n: '6er' },
             { id: 'bonus', n: 'BONUS (ab 63)', isStatic: true },
+            { id: '3p', n: '3er Pasch' }, // NEU
+            { id: '4p', n: '4er Pasch' }, // NEU
             { id: 'fh', n: 'Full House' }, { id: 'ks', n: 'Kl. Straße' },
             { id: 'gs', n: 'Gr. Straße' }, { id: 'kn', n: 'KNIFFEL' }, { id: 'ch', n: 'Chance' }
         ];
@@ -344,6 +346,15 @@
         let isHost = false;
 
         function updateUI() {
+            for (let i = 0; i < 5; i++) {
+                const el = document.getElementById(`die-${i}`);
+                if (el) {
+                    // Falls die Zahl 0 ist (Spielstart), zeige ein Fragezeichen
+                    el.innerText = gameState.dice[i] === 0 ? "?" : gameState.dice[i];
+                    el.className = gameState.keeps[i] ? "die keep" : "die";
+                }
+            }
+
             presenceRef.on('value', snap => {
                 const players = snap.val() ? Object.keys(snap.val()).sort() : [myName];
                 isHost = (players[0] === myName);
@@ -406,19 +417,14 @@
 
             presenceRef.once('value', snap => {
                 const players = snap.val() ? Object.keys(snap.val()).sort() : [myName];
-
-                // 1. Spiel als gestartet markieren
                 roomRef.child('gameStarted').set(true);
 
-                // 2. Den ersten Spieler (Host) als aktiv setzen
-                gameRef.update({
+                gameRef.set({
                     activePlayer: players[0],
                     rollsLeft: 3,
-                    dice: [1, 2, 3, 4, 5]
+                    dice: [0, 0, 0, 0, 0], // KEINE ZAHLEN BEIM START
+                    keeps: [false, false, false, false, false]
                 });
-
-                // 3. Chat-Nachricht senden
-                chatRef.push({ name: "SYSTEM", text: "Das Spiel wurde gestartet! " + players[0] + " beginnt." });
             });
         }
 
@@ -558,10 +564,22 @@
             const sum = d.reduce((a, b) => a + b, 0);
             const counts = {}; d.forEach(x => counts[x] = (counts[x] || 0) + 1);
             const v = Object.values(counts);
+
+            // Verhindert das Eintragen der Start-Nullen
+            if (d.includes(0)) return 0;
+
             if (!isNaN(id)) return d.filter(x => x == id).length * parseInt(id);
+
+            // NEU: 3er Pasch (Mindestens 3 gleiche -> Summe aller Würfel)
+            if (id === '3p') return v.some(count => count >= 3) ? sum : 0;
+
+            // NEU: 4er Pasch (Mindestens 4 gleiche -> Summe aller Würfel)
+            if (id === '4p') return v.some(count => count >= 4) ? sum : 0;
+
             if (id === 'kn') return v.includes(5) ? 50 : 0;
             if (id === 'ch') return sum;
             if (id === 'fh') return (v.includes(3) && v.includes(2)) ? 25 : 0;
+
             const u = [...new Set(d)].join('');
             if (id === 'ks') return /1234|2345|3456/.test(u) ? 30 : 0;
             if (id === 'gs') return /12345|23456/.test(u) ? 40 : 0;
