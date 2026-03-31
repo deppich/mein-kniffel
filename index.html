@@ -215,6 +215,35 @@
             text-align: center;
             color: white;
         }
+
+        @keyframes roll {
+            0% {
+                transform: rotate(0deg) scale(1);
+            }
+
+            25% {
+                transform: rotate(10deg) scale(1.1);
+            }
+
+            50% {
+                transform: rotate(-10deg) scale(1.1);
+            }
+
+            75% {
+                transform: rotate(5deg) scale(1.1);
+            }
+
+            100% {
+                transform: rotate(0deg) scale(1);
+            }
+        }
+
+        .rolling {
+            animation: roll 0.4s ease-in-out;
+            background: #eee !important;
+            color: transparent !important;
+            /* Versteckt die Zahl während des Rollens */
+        }
     </style>
 </head>
 
@@ -428,10 +457,38 @@
             });
         }
 
+        // --- WÜRFELN MIT ANIMATION ---
         function sendRoll() {
-            const newDice = [...gameState.dice];
-            for (let i = 0; i < 5; i++) if (!gameState.keeps[i]) newDice[i] = Math.floor(Math.random() * 6) + 1;
-            gameRef.update({ activePlayer: myName, dice: newDice, rollsLeft: gameState.rollsLeft - 1 });
+            if (gameState.rollsLeft <= 0) return;
+
+            // Lokale Animation starten
+            for (let i = 0; i < 5; i++) {
+                if (!gameState.keeps[i]) {
+                    const el = document.getElementById(`die-${i}`);
+                    el.classList.add('rolling');
+                }
+            }
+
+            // Kurze Verzögerung, damit die Animation sichtbar ist, bevor die Daten kommen
+            setTimeout(() => {
+                const newDice = [...gameState.dice];
+                for (let i = 0; i < 5; i++) {
+                    if (!gameState.keeps[i]) {
+                        newDice[i] = Math.floor(Math.random() * 6) + 1;
+                    }
+                }
+
+                gameRef.update({
+                    activePlayer: myName,
+                    dice: newDice,
+                    rollsLeft: gameState.rollsLeft - 1
+                }).then(() => {
+                    // Animation entfernen
+                    for (let i = 0; i < 5; i++) {
+                        document.getElementById(`die-${i}`).classList.remove('rolling');
+                    }
+                });
+            }, 400); // 400ms passt zur CSS Animation
         }
 
         function toggleKeep(i) {
@@ -440,36 +497,34 @@
             gameRef.update({ keeps: nk, activePlayer: myName });
         }
 
+        // --- LOG-EINTRAG BEIM EINTRAGEN ---
         function claimScore(id) {
-            // Statische Felder ignorieren
             if (categories.find(c => c.id === id)?.isStatic) return;
+            if (gameState.activePlayer !== "" && gameState.activePlayer !== myName) return;
+            if (gameState.rollsLeft === 3) return;
 
-            // PRÜFUNG: Bin ich wirklich dran?
-            presenceRef.once('value', snap => {
-                const players = snap.val() ? Object.keys(snap.val()).sort() : [myName];
-                const currentPlayer = gameState.activePlayer || players[0];
+            const val = calculatePoints(id);
+            const catName = categories.find(c => c.id === id).n;
 
-                if (currentPlayer !== myName) {
-                    alert("Halt! Du bist noch nicht an der Reihe.");
-                    return;
-                }
+            scoreRef.child(myName).child(id).set(val).then(() => {
+                // LOG IM CHAT POSTEN
+                const logText = val === 0
+                    ? `hat ${catName} GESTRICHEN (0 Pkt.)`
+                    : `hat ${val} Punkte bei ${catName} erzielt!`;
 
-                if (gameState.rollsLeft === 3) {
-                    alert("Du musst mindestens einmal würfeln!");
-                    return;
-                }
+                chatRef.push({
+                    name: "📢 LOG",
+                    text: `${myName} ${logText}`,
+                    isLog: true // Optionaler Marker für Styling
+                });
 
-                const val = calculatePoints(id);
-
-                // Punkt speichern
-                scoreRef.child(myName).child(id).set(val).then(() => {
-                    // Nächsten Spieler ermitteln
+                // Nächster Spieler (wie bisher)
+                presenceRef.once('value', snap => {
+                    const players = snap.val() ? Object.keys(snap.val()).sort() : [myName];
                     const nextPlayer = getNextPlayer(myName, players);
-
-                    // Spielstatus für den NÄCHSTEN setzen
                     gameRef.set({
                         activePlayer: nextPlayer,
-                        dice: [1, 1, 1, 1, 1],
+                        dice: [0, 0, 0, 0, 0],
                         keeps: [false, false, false, false, false],
                         rollsLeft: 3
                     });
@@ -552,10 +607,16 @@
             chatRef.push({ name: myName, text: i.value });
             i.value = "";
         }
-        chatRef.limitToLast(15).on('child_added', snap => {
+
+        chatRef.limitToLast(20).on('child_added', snap => {
             const m = snap.val();
             const d = document.getElementById('chat-messages');
-            d.innerHTML += `<div class="msg"><b>${m.name}:</b> ${m.text}</div>`;
+
+            // Unterschiedliches Styling für Log vs. Chat
+            const isLog = m.name === "📢 LOG";
+            const style = isLog ? "font-style: italic; color: #888; font-size: 0.8rem; border-left: 2px solid var(--primary); padding-left: 5px;" : "";
+
+            d.innerHTML += `<div class="msg" style="${style}"><b>${m.name}:</b> ${m.text}</div>`;
             d.scrollTop = d.scrollHeight;
         });
 
