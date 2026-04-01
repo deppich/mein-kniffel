@@ -239,7 +239,6 @@
             align-items: center;
             justify-content: center;
             /* WICHTIG: Schriftgröße hochschrauben! */
-            font-size: 60px;
             line-height: 1;
             font-family: "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
             border-radius: 12px;
@@ -247,7 +246,7 @@
             transition: transform 0.1s, background 0.2s;
             border: 3px solid #ccc;
             user-select: none;
-            font-size: 65px;
+            font-size: 55px;
             /* Verhindert Markieren beim Klicken */
         }
 
@@ -256,6 +255,10 @@
             border-color: #d4ac0d;
             transform: translateY(-5px);
             box-shadow: 0 5px 15px rgba(241, 196, 15, 0.4);
+        }
+
+        .die[innerHTML="?"] {
+            cursor: default;
         }
     </style>
 </head>
