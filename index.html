@@ -505,10 +505,25 @@
         }
 
         function toggleKeep(i) {
+            // 1. Prüfen: Bin ich überhaupt am Zug?
             if (gameState.activePlayer !== "" && gameState.activePlayer !== myName) return;
+
+            // 2. Prüfen: Hat der Würfel überhaupt schon einen Wert? 
+            // Wenn der Wert 0 ist (Anzeige "?"), darf man ihn nicht behalten.
+            if (gameState.dice[i] === 0) {
+                console.log("Würfel ohne Wert kann nicht behalten werden.");
+                return;
+            }
+
+            // Logik zum Umschalten
             const nk = [...gameState.keeps];
             nk[i] = !nk[i];
-            gameRef.update({ keeps: nk, activePlayer: myName });
+
+            // Update an Firebase senden
+            gameRef.update({
+                keeps: nk,
+                activePlayer: myName
+            });
         }
 
         function claimScore(id) {
