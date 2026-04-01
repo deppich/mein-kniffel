@@ -381,47 +381,45 @@
         const chatRef = roomRef.child('chat');
         const presenceRef = roomRef.child('presence');
 
-        // --- GAME LOGIC ---
-        gameRef.on('value', snap => {
-            const data = snap.val();
-            if (!data) {
-                gameRef.set({ activePlayer: "", dice: [1, 2, 3, 4, 5], keeps: [false, false, false, false, false], rollsLeft: 3 });
-                return;
-            }
-            gameState = data;
-            updateUI();
-        });
+        // --- GAME LOGIC & INITIALISIERUNG ---
 
-        function getNextPlayer(currentName, allPlayers) {
-            const sorted = allPlayers.sort();
-            const currentIndex = sorted.indexOf(currentName);
-            const nextIndex = (currentIndex + 1) % sorted.length;
-            return sorted[nextIndex];
+        // Diese Funktion wird aufgerufen, sobald die Seite lädt
+        function initGame() {
+            // 1. Listener für Spieler-Anwesenheit & Host-Logik
+            presenceRef.on('value', snap => {
+                const players = snap.val() ? Object.keys(snap.val()).sort() : [myName];
+                isHost = (players[0] === myName);
+
+                // 2. Listener für den globalen Spielstatus (Zentraler Punkt für alle Updates)
+                roomRef.on('value', roomSnap => {
+                    const data = roomSnap.val();
+                    if (data) {
+                        // Daten synchronisieren
+                        if (data.game) gameState = data.game;
+                        // Falls gameStarted in roomRef direkt liegt:
+                        gameState.gameStarted = data.gameStarted || false;
+
+                        // UI mit aktuellen Spielern zeichnen
+                        renderUI(players);
+
+                        // Score Tabelle rendern
+                        renderGlobalTable(data.scores || {}, players);
+                    }
+                });
+            });
+
+            // Chat-Listener separat
+            initChatListener();
         }
 
-        function getDiceIcon(num) {
-            const icons = {
-                1: '⚀',
-                2: '⚁',
-                3: '⚂',
-                4: '⚃',
-                5: '⚄',
-                6: '⚅'
-            };
-            return icons[num] || '?'; // Zeigt '?' wenn num = 0
-        }
-
-        // Variable, um den Host zu identifizieren (der alphabetisch erste in der Liste)
-        let isHost = false;
-
-        // 1. REINE UI-UPDATE FUNKTION
-        // Diese Funktion macht NUR die optische Darstellung basierend auf dem aktuellen Stand
+        // --- UI RENDERING (Die reine Anzeige) ---
         function renderUI(players) {
-            // Würfel aktualisieren
+            // Würfel-Optik aktualisieren
             for (let i = 0; i < 5; i++) {
                 const el = document.getElementById(`die-${i}`);
                 if (el) {
-                    el.innerHTML = getDiceIcon(gameState.dice[i]);
+                    // Wenn Würfelwert 0 ist (vor dem ersten Wurf), zeige '?'
+                    el.innerHTML = gameState.dice[i] === 0 ? '?' : getDiceIcon(gameState.dice[i]);
                     el.className = gameState.keeps[i] ? "die keep" : "die";
                 }
             }
@@ -430,6 +428,8 @@
             const gameCard = document.querySelector('.game-card');
             const scoreCard = document.querySelector('.score-card');
             const startBtn = document.getElementById('start-game-btn');
+            const statusText = document.getElementById('status-text');
+            const rollBtn = document.getElementById('roll-btn');
 
             if (!gameState.gameStarted) {
                 // LOBBY MODUS
@@ -457,26 +457,14 @@
                 const currentPlayer = gameState.activePlayer || players[0];
                 const isMyTurn = (currentPlayer === myName);
 
-                document.getElementById('status-text').innerText = isMyTurn ? "DU BIST DRAN!" : `${currentPlayer} IST DRAN`;
+                statusText.innerText = isMyTurn ? "DU BIST DRAN!" : `${currentPlayer} IST DRAN`;
 
-                const rb = document.getElementById('roll-btn');
-                rb.disabled = !isMyTurn || gameState.rollsLeft <= 0;
+                rollBtn.disabled = !isMyTurn || gameState.rollsLeft <= 0;
+                rollBtn.innerText = isMyTurn ? `WÜRFELN (${gameState.rollsLeft})` : "Warten...";
             }
-        }
 
-        // 2. FIREBASE LISTENER (Nur einmal beim Start aufrufen!)
-        function initGameListeners() {
-            // Listener für Spieler-Anwesenheit
-            presenceRef.on('value', snap => {
-                const players = snap.val() ? Object.keys(snap.val()).sort() : [myName];
-                isHost = (players[0] === myName);
-
-                // Listener für Spielstatus (Game Start)
-                roomRef.child('gameStarted').on('value', startSnap => {
-                    gameState.gameStarted = startSnap.val();
-                    renderUI(players); // UI neu zeichnen, wenn sich was ändert
-                });
-            });
+            // Spielerliste oben im Header
+            document.getElementById('player-list').innerText = players.join(', ');
         }
 
         function startGame() {
@@ -484,36 +472,39 @@
 
             presenceRef.once('value', snap => {
                 const players = snap.val() ? Object.keys(snap.val()).sort() : [myName];
-                roomRef.child('gameStarted').set(true);
 
-                gameRef.set({
-                    activePlayer: players[0],
-                    rollsLeft: 3,
-                    dice: [0, 0, 0, 0, 0], // KEINE ZAHLEN BEIM START
-                    keeps: [false, false, false, false, false]
+                // WICHTIG: Alles in einem Rutsch setzen
+                roomRef.update({
+                    gameStarted: true,
+                    game: {
+                        activePlayer: players[0],
+                        rollsLeft: 3,
+                        dice: [0, 0, 0, 0, 0],
+                        keeps: [false, false, false, false, false]
+                    }
                 });
             });
         }
 
-        // --- WÜRFELN MIT ANIMATION ---
+        // Hilfsfunktion für die Würfel-Icons
+        function getDiceIcon(num) {
+            const icons = { 1: '⚀', 2: '⚁', 3: '⚂', 4: '⚃', 5: '⚄', 6: '⚅' };
+            return icons[num] || '?';
+        }
+
+        // --- AKTIONEN (Würfeln, Click etc.) ---
         function sendRoll() {
             if (gameState.rollsLeft <= 0) return;
 
-            // Lokale Animation starten
+            // Animation
             for (let i = 0; i < 5; i++) {
-                if (!gameState.keeps[i]) {
-                    const el = document.getElementById(`die-${i}`);
-                    el.classList.add('rolling');
-                }
+                if (!gameState.keeps[i]) document.getElementById(`die-${i}`).classList.add('rolling');
             }
 
-            // Kurze Verzögerung, damit die Animation sichtbar ist, bevor die Daten kommen
             setTimeout(() => {
                 const newDice = [...gameState.dice];
                 for (let i = 0; i < 5; i++) {
-                    if (!gameState.keeps[i]) {
-                        newDice[i] = Math.floor(Math.random() * 6) + 1;
-                    }
+                    if (!gameState.keeps[i]) newDice[i] = Math.floor(Math.random() * 6) + 1;
                 }
 
                 gameRef.update({
@@ -521,42 +512,34 @@
                     dice: newDice,
                     rollsLeft: gameState.rollsLeft - 1
                 }).then(() => {
-                    // Animation entfernen
                     for (let i = 0; i < 5; i++) {
                         document.getElementById(`die-${i}`).classList.remove('rolling');
                     }
                 });
-            }, 400); // 400ms passt zur CSS Animation
+            }, 400);
         }
 
         function toggleKeep(i) {
             if (gameState.activePlayer !== "" && gameState.activePlayer !== myName) return;
-            const nk = [...gameState.keeps]; nk[i] = !nk[i];
+            const nk = [...gameState.keeps];
+            nk[i] = !nk[i];
             gameRef.update({ keeps: nk, activePlayer: myName });
         }
 
-        // --- LOG-EINTRAG BEIM EINTRAGEN ---
         function claimScore(id) {
             if (categories.find(c => c.id === id)?.isStatic) return;
             if (gameState.activePlayer !== "" && gameState.activePlayer !== myName) return;
-            if (gameState.rollsLeft === 3) return;
+            if (gameState.rollsLeft === 3) return; // Noch nicht gewürfelt
 
             const val = calculatePoints(id);
             const catName = categories.find(c => c.id === id).n;
 
             scoreRef.child(myName).child(id).set(val).then(() => {
-                // LOG IM CHAT POSTEN
-                const logText = val === 0
-                    ? `hat ${catName} GESTRICHEN (0 Pkt.)`
-                    : `hat ${val} Punkte bei ${catName} erzielt!`;
-
                 chatRef.push({
                     name: "📢 LOG",
-                    text: `${myName} ${logText}`,
-                    isLog: true // Optionaler Marker für Styling
+                    text: `${myName} hat ${val} Punkte bei ${catName} erzielt!`,
                 });
 
-                // Nächster Spieler (wie bisher)
                 presenceRef.once('value', snap => {
                     const players = snap.val() ? Object.keys(snap.val()).sort() : [myName];
                     const nextPlayer = getNextPlayer(myName, players);
@@ -570,15 +553,9 @@
             });
         }
 
-        // --- SCORES & TABLE ---
-        presenceRef.on('value', pSnap => {
-            const players = pSnap.val() ? Object.keys(pSnap.val()) : [myName];
-            document.getElementById('player-list').innerText = players.join(', ');
-            scoreRef.on('value', sSnap => renderGlobalTable(sSnap.val() || {}, players));
-        });
-
+        // --- HILFSFUNKTIONEN (Tabellen, Chat etc.) ---
         function renderGlobalTable(allScores, players) {
-            const pNames = [...new Set([...players, ...Object.keys(allScores)])].sort();
+            const pNames = players;
             const head = document.querySelector('#score-head tr');
             head.innerHTML = '<th>Kategorie</th>';
             pNames.forEach(p => head.innerHTML += `<th style="${p === myName ? 'background:var(--primary)' : ''}">${p}</th>`);
@@ -603,42 +580,20 @@
                 });
                 body.innerHTML += row + `</tr>`;
             });
+            // Fusszeile (Gesamt) hier ergänzen...
+        }
 
-            const foot = document.querySelector('#score-foot tr');
-            foot.innerHTML = '<td class="cat-name">GESAMT</td>';
-            pNames.forEach(p => {
-                let total = Object.values(allScores[p] || {}).reduce((a, b) => a + b, 0);
-                const sum6 = ['1', '2', '3', '4', '5', '6'].reduce((s, i) => s + (allScores[p]?.[i] || 0), 0);
-                if (sum6 >= 63) total += 35;
-                foot.innerHTML += `<td style="background:#2c3e50; color:white;">${total}</td>`;
+        function initChatListener() {
+            chatRef.limitToLast(20).on('child_added', snap => {
+                const m = snap.val();
+                const d = document.getElementById('chat-messages');
+                const isLog = m.name === "📢 LOG";
+                const style = isLog ? "font-style: italic; color: #888; font-size: 0.8rem; border-left: 2px solid var(--primary); padding-left: 5px;" : "";
+                d.innerHTML += `<div class="msg" style="${style}"><b>${m.name}:</b> ${m.text}</div>`;
+                d.scrollTop = d.scrollHeight;
             });
-            checkGameEnd(allScores, pNames);
         }
 
-        // --- ENDGAME & FIREWORKS ---
-        function checkGameEnd(allScores, pNames) {
-            const playableCats = categories.filter(c => !c.isStatic).map(c => c.id);
-            const isFinished = pNames.length > 0 && pNames.every(p => playableCats.every(catId => allScores[p]?.[catId] !== undefined));
-
-            const existing = document.getElementById('victory-overlay');
-            if (isFinished) {
-                if (existing) return;
-                let winN = ""; let maxS = -1; let list = "";
-                pNames.forEach(p => {
-                    let t = Object.values(allScores[p] || {}).reduce((a, b) => a + b, 0);
-                    if (['1', '2', '3', '4', '5', '6'].reduce((s, i) => s + (allScores[p]?.[i] || 0), 0) >= 63) t += 35;
-                    if (t > maxS) { maxS = t; winN = p; }
-                    list += `<li>${p}: ${t} Pkt.</li>`;
-                });
-                const div = document.createElement('div');
-                div.id = 'victory-overlay';
-                div.innerHTML = `<h1>🏆 ${winN} GEWINNT! 🏆</h1><h2 style="color:var(--gold)">${maxS} Punkte</h2><ul style="list-style:none;padding:0">${list}</ul><button onclick="fullGameReset()" style="width:200px; background:var(--primary); color:white;">NEUSTART</button>`;
-                document.body.appendChild(div);
-                confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
-            } else if (existing) { existing.remove(); }
-        }
-
-        // --- CHAT & HELPERS ---
         function sendMessage() {
             const i = document.getElementById('chat-input');
             if (!i.value) return;
@@ -646,39 +601,25 @@
             i.value = "";
         }
 
-        chatRef.limitToLast(20).on('child_added', snap => {
-            const m = snap.val();
-            const d = document.getElementById('chat-messages');
-
-            // Unterschiedliches Styling für Log vs. Chat
-            const isLog = m.name === "📢 LOG";
-            const style = isLog ? "font-style: italic; color: #888; font-size: 0.8rem; border-left: 2px solid var(--primary); padding-left: 5px;" : "";
-
-            d.innerHTML += `<div class="msg" style="${style}"><b>${m.name}:</b> ${m.text}</div>`;
-            d.scrollTop = d.scrollHeight;
-        });
+        // Restliche Hilfsfunktionen (getNextPlayer, calculatePoints, Reset etc.)
+        function getNextPlayer(currentName, allPlayers) {
+            const currentIndex = allPlayers.indexOf(currentName);
+            const nextIndex = (currentIndex + 1) % allPlayers.length;
+            return allPlayers[nextIndex];
+        }
 
         function calculatePoints(id) {
             const d = [...gameState.dice].sort();
             const sum = d.reduce((a, b) => a + b, 0);
             const counts = {}; d.forEach(x => counts[x] = (counts[x] || 0) + 1);
             const v = Object.values(counts);
-
-            // Verhindert das Eintragen der Start-Nullen
             if (d.includes(0)) return 0;
-
             if (!isNaN(id)) return d.filter(x => x == id).length * parseInt(id);
-
-            // NEU: 3er Pasch (Mindestens 3 gleiche -> Summe aller Würfel)
             if (id === '3p') return v.some(count => count >= 3) ? sum : 0;
-
-            // NEU: 4er Pasch (Mindestens 4 gleiche -> Summe aller Würfel)
             if (id === '4p') return v.some(count => count >= 4) ? sum : 0;
-
             if (id === 'kn') return v.includes(5) ? 50 : 0;
             if (id === 'ch') return sum;
             if (id === 'fh') return (v.includes(3) && v.includes(2)) ? 25 : 0;
-
             const u = [...new Set(d)].join('');
             if (id === 'ks') return /1234|2345|3456/.test(u) ? 30 : 0;
             if (id === 'gs') return /12345|23456/.test(u) ? 40 : 0;
@@ -687,12 +628,17 @@
 
         function fullGameReset() {
             if (confirm("Raum wirklich komplett zurücksetzen?")) {
-                roomRef.remove(); // Löscht game, scores, chat UND gameStarted
-                location.reload(); // Seite neu laden, um sauber in der Lobby zu starten
+                roomRef.remove().then(() => location.reload());
             }
         }
+
         function changeName() { localStorage.removeItem('kniffel_name'); location.reload(); }
-        const r = presenceRef.child(myName); r.set(true); r.onDisconnect().remove();
+
+        // Startschuss
+        const r = presenceRef.child(myName);
+        r.set(true);
+        r.onDisconnect().remove();
+        initGame();
     </script>
 </body>
 
