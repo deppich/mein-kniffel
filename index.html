@@ -553,34 +553,116 @@
             });
         }
 
-        // --- HILFSFUNKTIONEN (Tabellen, Chat etc.) ---
+        // --- SCORES & TABLE ---
         function renderGlobalTable(allScores, players) {
-            const pNames = players;
+            const pNames = players; // Wir nutzen die Liste der aktuell anwesenden Spieler
             const head = document.querySelector('#score-head tr');
             head.innerHTML = '<th>Kategorie</th>';
-            pNames.forEach(p => head.innerHTML += `<th style="${p === myName ? 'background:var(--primary)' : ''}">${p}</th>`);
+            pNames.forEach(p => {
+                const isMe = (p === myName);
+                head.innerHTML += `<th style="${isMe ? 'background:var(--primary); border: 2px solid white;' : ''}">${p}</th>`;
+            });
 
             const body = document.getElementById('score-body');
             body.innerHTML = '';
+
             categories.forEach(cat => {
                 let row = `<tr><td class="cat-name">${cat.n}</td>`;
                 pNames.forEach(p => {
-                    let val = "-"; let style = ""; let action = "";
+                    let val = "-";
+                    let style = "";
+                    let action = "";
+
                     if (cat.id === 'bonus') {
                         const sum = ['1', '2', '3', '4', '5', '6'].reduce((s, i) => s + (allScores[p]?.[i] || 0), 0);
                         val = sum >= 63 ? 35 : `(${sum}/63)`;
-                        style = sum >= 63 ? "background:#f1c40f; font-weight:bold;" : "background:#eee; color:#999; font-size:0.7rem;";
+                        style = sum >= 63 ? "background:#f1c40f; font-weight:bold; color: #000;" : "background:#eee; color:#999; font-size:0.7rem;";
                     } else {
                         const s = allScores[p]?.[cat.id];
                         val = (s !== undefined) ? s : "-";
-                        if (p === myName && val === "-") action = `onclick="claimScore('${cat.id}')" style="cursor:pointer; background:#fff"`;
-                        if (val !== "-") style = "background:#d1f2eb; font-weight:bold";
+
+                        // Wenn ich dran bin und das Feld leer ist -> Klickbar machen
+                        if (p === myName && val === "-") {
+                            action = `onclick="claimScore('${cat.id}')" style="cursor:pointer; background:#fff"`;
+                        }
+                        if (val !== "-") {
+                            style = "background:#d1f2eb; font-weight:bold; color: #2c3e50;";
+                        }
                     }
                     row += `<td ${action} style="${style}">${val}</td>`;
                 });
                 body.innerHTML += row + `</tr>`;
             });
-            // Fusszeile (Gesamt) hier ergänzen...
+
+            // Fußzeile: Gesamtstand berechnen
+            const foot = document.querySelector('#score-foot tr');
+            foot.innerHTML = '<td class="cat-name">GESAMT</td>';
+            pNames.forEach(p => {
+                let total = Object.keys(allScores[p] || {}).reduce((sum, key) => {
+                    // Nur echte Kategorien zählen, nicht den Bonus doppelt addieren
+                    return categories.find(c => c.id === key && !c.isStatic) ? sum + allScores[p][key] : sum;
+                }, 0);
+
+                const sumUpper = ['1', '2', '3', '4', '5', '6'].reduce((s, i) => s + (allScores[p]?.[i] || 0), 0);
+                if (sumUpper >= 63) total += 35;
+
+                foot.innerHTML += `<td style="background:#2c3e50; color:white; font-size: 1.1rem;">${total}</td>`;
+            });
+
+            // WICHTIG: Prüfung ob das Spiel zu Ende ist
+            checkGameEnd(allScores, pNames);
+        }
+
+        // --- ENDGAME & FIREWORKS ---
+        function checkGameEnd(allScores, pNames) {
+            if (pNames.length === 0) return;
+
+            // Liste aller Kategorien, die befüllt sein MÜSSEN (ohne den Bonus-Platzhalter)
+            const playableCats = categories.filter(c => !c.isStatic).map(c => c.id);
+
+            // Prüfen: Hat JEDER Spieler in JEDER Kategorie einen Wert?
+            const isFinished = pNames.every(p =>
+                playableCats.every(catId => allScores[p] && allScores[p][catId] !== undefined)
+            );
+
+            const existing = document.getElementById('victory-overlay');
+            if (isFinished) {
+                if (existing) return; // Schon angezeigt
+
+                let winnerName = "";
+                let maxScore = -1;
+                let resultsList = "";
+
+                pNames.forEach(p => {
+                    let total = Object.keys(allScores[p] || {}).reduce((sum, key) => {
+                        return categories.find(c => c.id === key && !c.isStatic) ? sum + allScores[p][key] : sum;
+                    }, 0);
+                    const sumUpper = ['1', '2', '3', '4', '5', '6'].reduce((s, i) => s + (allScores[p]?.[i] || 0), 0);
+                    if (sumUpper >= 63) total += 35;
+
+                    if (total > maxScore) {
+                        maxScore = total;
+                        winnerName = p;
+                    }
+                    resultsList += `<li>${p}: <b>${total} Punkte</b></li>`;
+                });
+
+                // Overlay erstellen
+                const overlay = document.createElement('div');
+                overlay.id = 'victory-overlay';
+                overlay.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center; color:white; text-align:center;";
+                overlay.innerHTML = `
+                    <h1 style="font-size:3rem; color:var(--gold);">🏆 ${winnerName} GEWINNT! 🏆</h1>
+                    <ul style="list-style:none; padding:0; font-size:1.5rem; margin:20px 0;">${resultsList}</ul>
+                    <button onclick="fullGameReset()" style="width:250px; background:var(--primary); padding:15px; font-size:1.2rem;">NEUES SPIEL</button>
+                `;
+                document.body.appendChild(overlay);
+
+                // Konfetti-Effekt
+                confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 } });
+            } else if (existing) {
+                existing.remove();
+            }
         }
 
         function initChatListener() {
